@@ -1,0 +1,12 @@
+@extends('layouts.app')
+@section('title','Event Configuration')
+@section('content')
+<h1>{{ $event->exists ? 'Edit event' : 'Create choice event' }}</h1><p class="text-secondary">Set the submission period in Bangladesh time (UTC+06:00).</p>
+<form class="card card-body" method="post" action="{{ $event->exists ? route('choice-events.update',$event) : route('choice-events.store') }}">@csrf @if($event->exists) @method('PUT') @endif
+<label class="form-label required" for="title">Event title</label><input class="form-control mb-3" id="title" name="title" maxlength="255" value="{{ old('title',$event->title) }}" required>
+<label class="form-label" for="instructions">Candidate instructions</label><textarea class="form-control mb-3" id="instructions" name="instructions" maxlength="3000" rows="3">{{ old('instructions',$event->instructions) }}</textarea>
+<div class="row"><div class="col-md-6"><label class="form-label required" for="start_at">Opens at</label><input id="start_at" class="form-control mb-3" type="datetime-local" name="start_at" value="{{ old('start_at',$event->start_at?->format('Y-m-d\TH:i')) }}" required></div><div class="col-md-6"><label class="form-label required" for="end_at">Closes at</label><input id="end_at" class="form-control mb-3" type="datetime-local" name="end_at" value="{{ old('end_at',$event->end_at?->format('Y-m-d\TH:i')) }}" required></div></div>
+<label class="form-label" for="status">Status</label><select id="status" class="form-select mb-3" name="status"><option value="DRAFT" @selected(old('status',$event->status)==='DRAFT')>Draft</option>@if($event->exists)<option value="OPEN" @selected(old('status',$event->status)==='OPEN')>Open</option>@endif</select>
+@if($event->exists)<input type="hidden" name="multiple_posts" value="{{ (int)$event->multiple_posts }}"><p class="text-secondary">Eligibility mode: {{ $event->multiple_posts ? 'Multiple posts' : 'Single post' }}</p>@else<label class="form-check mb-3"><input class="form-check-input" type="checkbox" name="multiple_posts" value="1" @checked(old('multiple_posts'))><span class="form-check-label">Multiple applied posts (configuration only in Phase 1; import matching follows in Phase 2)</span></label>@endif
+<div><button class="btn btn-primary">Save event</button> <a class="btn btn-outline-secondary" href="{{ route('choice-events.index') }}">Back</a></div></form>
+@endsection
