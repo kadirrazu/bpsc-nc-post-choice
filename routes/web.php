@@ -14,6 +14,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/choice-events/{choiceEvent}', [ChoiceEventController::class,'show'])->name('choice-events.show');
         Route::get('/choice-events/{choiceEvent}/edit', [ChoiceEventController::class,'edit'])->name('choice-events.edit');
         Route::put('/choice-events/{choiceEvent}', [ChoiceEventController::class,'update'])->name('choice-events.update');
+        Route::delete('/choice-events/{choiceEvent}', [ChoiceEventController::class,'destroy'])->name('choice-events.destroy');
+        Route::delete('/choice-events/{choiceEvent}/posts/{post}/choices/{choice}', [ChoiceEventController::class,'destroyChoice'])->name('choice-options.destroy');
         Route::post('/choice-events/{choiceEvent}/posts', [ChoiceEventController::class,'storePost'])->name('choice-posts.store');
         Route::post('/choice-events/{choiceEvent}/posts/{post}/choices', [ChoiceEventController::class,'storeChoice'])->name('choice-options.store');
         Route::get('/candidate-import-template', [CandidateImportController::class,'template'])->name('choice-import.template');

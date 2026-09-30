@@ -9,7 +9,9 @@ use Illuminate\Validation\ValidationException;
 class CandidateImportController extends Controller {
     private function check(ChoiceEvent $event, EventPost $post): void {
         abort_unless($post->choice_event_id===$event->id,404);
-        abort_unless($event->status==='DRAFT' && $event->end_at->gte(now()),403,'Imports require a current draft event.');
+        abort_unless(in_array($event->status,['DRAFT','PUBLISHED'],true) && $event->end_at->gte(now()),403,'Imports require a current Draft or Published event.');
+        $candidateIds=$event->candidates()->select('id');
+        abort_if(DB::table('choice_submissions')->whereIn('event_candidate_id',$candidateIds)->exists(),403,'Imports are locked once submissions exist.');
         abort_if($event->multiple_posts,422,'Multiple-post matching will be enabled in the next phase.');
     }
     public function index(ChoiceEvent $choiceEvent, EventPost $post) {

@@ -23,9 +23,9 @@ class ChoiceFoundationTest extends TestCase {
     }
     public function test_public_listing_enforces_status_and_time_window(): void {
         $user=$this->staff();
-        $this->event($user,['title'=>'Visible event','status'=>'OPEN']);
-        $this->event($user,['title'=>'Expired event','status'=>'OPEN','end_at'=>now()->subMinute()]);
-        $this->event($user,['title'=>'Future event','status'=>'OPEN','start_at'=>now()->addMinutes(10)]);
+        $this->event($user,['title'=>'Visible event','status'=>'PUBLISHED']);
+        $this->event($user,['title'=>'Expired event','status'=>'PUBLISHED','end_at'=>now()->subMinute()]);
+        $this->event($user,['title'=>'Future event','status'=>'PUBLISHED','start_at'=>now()->addMinutes(10)]);
         $this->event($user,['title'=>'Private draft']);
         $this->get('/')->assertOk()->assertSee('Bangladesh Public Service Commission')->assertSee('Visible event')->assertDontSee('Expired event')->assertDontSee('Future event')->assertDontSee('Private draft');
     }
