@@ -1,7 +1,8 @@
 <?php
 namespace App\Http\Controllers;
 use App\Models\{ChoiceEvent,EventPost,EventCandidate};
-use App\Services\Choice\CandidateCsvReader;
+use App\Services\Choice\{CandidateCsvReader,CandidateExcelReader};
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -20,14 +21,20 @@ class CandidateImportController extends Controller {
     }
     public function preview(Request $r, ChoiceEvent $choiceEvent, EventPost $post, CandidateCsvReader $reader) {
         $this->check($choiceEvent,$post);
-        $r->validate(['file'=>'required|file|mimes:csv,txt|max:5120']);
-        try { $result=$reader->read($r->file('file')->getRealPath()); }
+        $key='choice_import.'.$choiceEvent->id.'.'.$post->id;
+        $r->session()->forget($key);
+        $r->validate(['file'=>'required|file|mimes:csv,txt,xls,xlsx|max:5120']);
+        $extension=strtolower($r->file('file')->getClientOriginalExtension());
+        if (!in_array($extension,['csv','txt','xls','xlsx'],true)) throw ValidationException::withMessages(['file'=>'Upload a CSV, XLS or XLSX file.']);
+        try { $result=in_array($extension,['xls','xlsx'],true)
+            ? (new CandidateExcelReader)->read($r->file('file')->getRealPath(),$extension)
+            : $reader->read($r->file('file')->getRealPath()); }
         catch (\InvalidArgumentException $e) { throw ValidationException::withMessages(['file'=>$e->getMessage()]); }
         // One indexed query checks all uploaded identifiers against the selected post.
         $existing=$post->applications()->get(['user','reg']);
         $users=$existing->pluck('user')->map(fn($v)=>mb_strtolower($v))->flip();
         $regs=$existing->pluck('reg')->map(fn($v)=>mb_strtolower($v))->flip();
-        foreach ($result['rows'] as $i=>$row) if ($users->has(mb_strtolower($row['user'])) || $regs->has(mb_strtolower($row['reg']))) $result['errors'][]='Row '.($i+2).': user or reg already exists for this post.';
+        foreach ($result['rows'] as $i=>$row) if ($users->has(mb_strtolower($row['user'])) || $regs->has(mb_strtolower($row['reg']))) $result['errors'][]='Row '.($result['row_numbers'][$i] ?? $i+2).': user or reg already exists for this post.';
         $key='choice_import.'.$choiceEvent->id.'.'.$post->id;
         $r->session()->forget($key);
         $nonce=Str::random(40);
@@ -53,7 +60,14 @@ class CandidateImportController extends Controller {
         $r->session()->forget($key);
         return redirect()->route('choice-import.index',[$choiceEvent,$post])->with('success',count($preview['rows']).' candidates imported.');
     }
-    public function template() {
+    public function template(Request $r) {
+        if ($r->query('format')==='xlsx') {
+            try { $book=(new CandidateExcelReader)->sample(); }
+            catch (\InvalidArgumentException $e) { throw ValidationException::withMessages(['file'=>$e->getMessage()]); }
+            return response()->streamDownload(function () use ($book) {
+                try { (new Xlsx($book))->save('php://output'); } finally { $book->disconnectWorksheets(); }
+            },'candidate-import-sample_'.now()->format('Ymd_His').'.xlsx',['Content-Type'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        }
         return response()->streamDownload(function () { $out=fopen('php://output','w'); fputcsv($out,array_merge(CandidateCsvReader::REQUIRED,CandidateCsvReader::OPTIONAL),',','"',''); fclose($out); },'candidate-import-template.csv',['Content-Type'=>'text/csv']);
     }
 }

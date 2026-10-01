@@ -1,6 +1,6 @@
 <?php
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\{UserController,ChoiceEventController,CandidateImportController};
+use App\Http\Controllers\{UserController,ChoiceEventController,CandidateImportController,ChoiceEditorController};
 use App\Http\Middleware\ChoiceStaff;
 use App\Models\ChoiceEvent;
 Route::get('/', fn()=>view('choice.public.home',['events'=>ChoiceEvent::available()->orderBy('end_at')->get()]))->name('home');
@@ -18,6 +18,10 @@ Route::middleware('auth')->group(function () {
         Route::delete('/choice-events/{choiceEvent}/posts/{post}/choices/{choice}', [ChoiceEventController::class,'destroyChoice'])->name('choice-options.destroy');
         Route::post('/choice-events/{choiceEvent}/posts', [ChoiceEventController::class,'storePost'])->name('choice-posts.store');
         Route::post('/choice-events/{choiceEvent}/posts/{post}/choices', [ChoiceEventController::class,'storeChoice'])->name('choice-options.store');
+        Route::put('/choice-events/{choiceEvent}/posts/{post}/choices', [ChoiceEditorController::class,'save'])->name('choice-editor.save');
+        Route::get('/choice-events/{choiceEvent}/posts/{post}/choice-sample', [ChoiceEditorController::class,'sample'])->name('choice-editor.sample');
+        Route::post('/choice-events/{choiceEvent}/posts/{post}/choice-import/preview', [ChoiceEditorController::class,'preview'])->name('choice-editor.preview');
+        Route::post('/choice-events/{choiceEvent}/posts/{post}/choice-import/confirm', [ChoiceEditorController::class,'confirm'])->name('choice-editor.confirm');
         Route::get('/candidate-import-template', [CandidateImportController::class,'template'])->name('choice-import.template');
         Route::get('/choice-events/{choiceEvent}/posts/{post}/candidates', [CandidateImportController::class,'index'])->name('choice-import.index');
         Route::post('/choice-events/{choiceEvent}/posts/{post}/candidates/preview', [CandidateImportController::class,'preview'])->name('choice-import.preview');
