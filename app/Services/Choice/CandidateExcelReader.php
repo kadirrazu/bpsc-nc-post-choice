@@ -46,7 +46,7 @@ class CandidateExcelReader {
     }
     public function sample(): Spreadsheet {
         $this->installed(); $book=new Spreadsheet; $sheet=$book->getActiveSheet(); $sheet->setTitle('Candidates');
-        $headers=array_merge(CandidateCsvReader::REQUIRED,CandidateCsvReader::OPTIONAL);
+        $headers=array_merge(['user','reg','name','fname','mname','b_date'],array_values(array_diff(CandidateCsvReader::OPTIONAL,['fname','mname'])));
         foreach ($headers as $i=>$header) {
             $sheet->setCellValueExplicit([$i+1,1],$header,DataType::TYPE_STRING);
             $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i+1))->setWidth(in_array($header,['name','fname','mname','post_name','ministry']) ? 30 : 18);

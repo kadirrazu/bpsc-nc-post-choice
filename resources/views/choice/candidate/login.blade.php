@@ -1,0 +1,4 @@
+@extends('choice.candidate.layout')
+@section('content')
+<div class="card" style="max-width:560px"><form class="card-body" method="post" action="{{ route('candidate.authenticate',$event) }}">@csrf<h2 class="h3">Candidate Sign In</h2><p class="text-secondary">Enter your User ID and birth date exactly as recorded in your application.</p><label class="form-label" for="user">User ID</label><input class="form-control mb-3" id="user" name="user" value="{{ old('user') }}" maxlength="10" autocomplete="off" required><label class="form-label" for="birth_date">Birth Date (DDMMYYYY)</label><input class="form-control" id="birth_date" name="birth_date" value="{{ old('birth_date') }}" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" autocomplete="off" placeholder="10101997" required><p class="form-hint mb-3">Example: 10 October 1997 → 10101997</p><button class="btn btn-primary">Continue to Choices</button></form></div>
+@endsection

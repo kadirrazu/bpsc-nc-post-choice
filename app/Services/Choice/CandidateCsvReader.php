@@ -3,8 +3,8 @@ namespace App\Services\Choice;
 use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
 class CandidateCsvReader {
-    public const REQUIRED=['user','reg','name','fname','mname','b_date'];
-    public const OPTIONAL=['dist_code','dist_name','unit','post_code','post_name','ministry','ssc_roll','ssc_year','hsc_roll','hsc_year','nid'];
+    public const REQUIRED=['user','reg','name','b_date'];
+    public const OPTIONAL=['fname','mname','dist_code','dist_name','unit','post_code','post_name','ministry','ssc_roll','ssc_year','hsc_roll','hsc_year','nid'];
     public function read(string $path): array {
         $handle=fopen($path,'rb');
         if (!$handle) throw new InvalidArgumentException('Unable to read file.');
@@ -29,8 +29,9 @@ class CandidateCsvReader {
             if (++$count>(int)config('choice.import_max_rows',10000)) throw new InvalidArgumentException('File exceeds the row limit. Split it into smaller files.');
             if (count($values)!==count($header)) { $errors[]="Row {$line}: column count does not match."; continue; }
             $data=array_intersect_key(array_combine($header,$values),array_flip(array_merge(self::REQUIRED,self::OPTIONAL)));
-            $rules=['user'=>'required|string|max:10','reg'=>'required|string|max:10','name'=>'required|string|max:255','fname'=>'required|string|max:255','mname'=>'required|string|max:255'];
+            $rules=['user'=>'required|string|max:10','reg'=>'required|string|max:10','name'=>'required|string|max:255'];
             foreach (self::OPTIONAL as $key) $rules[$key]='nullable|string|max:'.(in_array($key,['ssc_roll','ssc_year','hsc_roll','hsc_year','nid']) ? '30' : '255');
+            foreach (['fname','mname'] as $key) $data[$key]=($data[$key] ?? '')!=='' ? $data[$key] : null;
             $rowErrors=array_merge($record['errors'] ?? [],Validator::make($data,$rules)->errors()->all());
             try { $data['b_date']=(new BirthDateNormalizer)->normalize($data['b_date']); }
             catch (InvalidArgumentException $e) { $rowErrors[]=$e->getMessage(); }

@@ -1,0 +1,5 @@
+@extends('choice.candidate.layout')
+@section('content')
+<h2 class="h3">Review Before Final Submission</h2><p><strong>{{ $person->name }}</strong></p><div class="card table-responsive"><table class="table mb-0"><thead><tr><th>Preference</th><th>Code</th><th>Choice</th></tr></thead><tbody>@foreach($selected as $choice)<tr><td>{{ $loop->iteration }}</td><td>{{ $choice->code }}</td><td>{{ $choice->title }}</td></tr>@endforeach</tbody></table></div>
+<form method="post" class="mt-3" action="{{ route('candidate.submit',$event) }}">@csrf<input type="hidden" name="nonce" value="{{ $nonce }}"><label class="form-check mb-3"><input class="form-check-input" type="checkbox" name="confirm" value="1" required><span class="form-check-label">I have checked my preference order. I understand that I cannot change it after final submission.</span></label><button class="btn btn-primary">Final Submit</button> <a class="btn btn-outline-secondary" href="{{ route('candidate.choices',$event) }}">Back to Choice Selection</a></form>
+@endsection

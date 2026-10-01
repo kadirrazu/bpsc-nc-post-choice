@@ -1,0 +1,23 @@
+.candidate-info { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:18px 24px; }
+.candidate-info dt { font-size:12px; font-weight:500; color:#65758a; margin-bottom:5px; }
+.candidate-info dd { margin:0; font-weight:600; overflow-wrap:anywhere; }
+.choice-panel { border-color:#dce5ee; overflow:hidden; }
+.choice-selected-panel { border-top:3px solid #5c85ae; }
+.choice-panel .card-header { align-items:center; }
+.choice-drop-zone { min-height:240px; max-height:560px; overflow-y:auto; transition:background .15s; }
+.choice-drop-zone.is-drag-over { background:#edf4fb; outline:2px dashed #7697b7; outline-offset:-5px; }
+.choice-panel-list { list-style:none; margin:0; padding:0; }
+.choice-panel-item { display:flex; align-items:center; gap:10px; border:1px solid #e0e7ef; border-radius:9px; background:#fff; padding:12px; margin-bottom:10px; cursor:grab; }
+.choice-panel-item:hover { background:#f6f9fc; border-color:#a9bfd5; }
+.choice-panel-item:focus-within { outline:2px solid #7697b7; outline-offset:2px; }
+.choice-panel-item.is-drop-before { border-top:3px solid #517ca6; }
+.choice-panel-item.is-drop-after { border-bottom:3px solid #517ca6; }
+.choice-position { flex-shrink:0; font-size:12px; min-width:25px; color:#65758a; }
+.choice-transfer { border:0; padding:0; background:transparent; text-align:left; flex:1; min-width:0; color:inherit; cursor:pointer; line-height:1.45; }
+.choice-transfer strong { font-size:14px; font-weight:600; overflow-wrap:anywhere; }
+.choice-transfer small { display:block; color:#65758a; margin-top:4px; font-size:12px; }
+.choice-row-actions { display:flex; gap:4px; flex-shrink:0; }
+.choice-row-actions button { min-width:30px; padding:4px 7px; }
+.choice-panel-empty { color:#65758a; text-align:center; border:1px dashed #cfdae5; border-radius:9px; padding:36px 20px; margin:0; }
+@media(max-width:767px) { .candidate-info { grid-template-columns:repeat(2,minmax(0,1fr)); } .choice-drop-zone { max-height:430px; } }
+@media(max-width:420px) { .choice-panel-item { flex-wrap:wrap; } .choice-row-actions { margin-left:auto; } }

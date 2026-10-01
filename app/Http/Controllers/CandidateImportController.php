@@ -1,6 +1,8 @@
 <?php
 namespace App\Http\Controllers;
 use App\Models\{ChoiceEvent,EventPost,EventCandidate};
+use App\Enums\UserRole;
+use Illuminate\Validation\Rule;
 use App\Services\Choice\{CandidateCsvReader,CandidateExcelReader};
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Illuminate\Http\Request;
@@ -15,9 +17,54 @@ class CandidateImportController extends Controller {
         abort_if(DB::table('choice_submissions')->whereIn('event_candidate_id',$candidateIds)->exists(),403,'Imports are locked once submissions exist.');
         abort_if($event->multiple_posts,422,'Multiple-post matching will be enabled in the next phase.');
     }
-    public function index(ChoiceEvent $choiceEvent, EventPost $post) {
+    public function index(Request $r, ChoiceEvent $choiceEvent, EventPost $post) {
         abort_unless($post->choice_event_id===$choiceEvent->id,404);
-        return view('choice.import.index',['event'=>$choiceEvent,'post'=>$post,'applications'=>$post->applications()->with('candidate')->latest()->paginate(25)]);
+        $filters=$r->validate(['search'=>'nullable|string|max:255','district'=>'nullable|string|max:255','submission_status'=>['nullable',Rule::in(['submitted','not_submitted'])],'parent_names'=>['nullable',Rule::in(['complete','missing'])],'per_page'=>['nullable',Rule::in([25,50,100])]]);
+        $search=trim($filters['search'] ?? ''); $perPage=(int)($filters['per_page'] ?? 25);
+        $submittedQuery=function ($q) {
+            $q->selectRaw('1')->from('choice_submissions')->whereColumn('choice_submissions.event_candidate_id','candidate_applications.event_candidate_id')->where('choice_submissions.status','SUBMITTED');
+        };
+        $base=$post->applications()->getQuery();
+        $total=(clone $base)->count();
+        $submitted=(clone $base)->whereExists($submittedQuery)->count();
+        $imports=DB::table('candidate_imports')->where('event_post_id',$post->id);
+        $summary=['total'=>$total,'submitted'=>$submitted,'not_submitted'=>$total-$submitted,'imports'=>(clone $imports)->count(),'last_import'=>(clone $imports)->max('created_at')];
+        $districts=(clone $base)->whereNotNull('dist_name')->where('dist_name','!=','')->distinct()->orderBy('dist_name')->pluck('dist_name');
+        $query=(clone $base)->with('candidate')->select('candidate_applications.*')->selectSub(DB::table('choice_submissions')->selectRaw('COUNT(*)')->whereColumn('choice_submissions.event_candidate_id','candidate_applications.event_candidate_id')->where('status','SUBMITTED'),'submitted_count');
+        if ($search!=='') $query->where(function ($q) use ($search) {
+            $q->where('user','like','%'.$search.'%')->orWhere('reg','like','%'.$search.'%')->orWhereHas('candidate',fn($q)=>$q->where('name','like','%'.$search.'%')->orWhere('fname','like','%'.$search.'%')->orWhere('mname','like','%'.$search.'%'));
+        });
+        if (!empty($filters['district'])) $query->where('dist_name',$filters['district']);
+        if (($filters['submission_status'] ?? '')==='submitted') $query->whereExists($submittedQuery);
+        if (($filters['submission_status'] ?? '')==='not_submitted') $query->whereNotExists($submittedQuery);
+        if (($filters['parent_names'] ?? '')==='complete') $query->whereHas('candidate',fn($q)=>$q->whereNotNull('fname')->where('fname','!=','')->whereNotNull('mname')->where('mname','!=',''));
+        if (($filters['parent_names'] ?? '')==='missing') $query->whereHas('candidate',fn($q)=>$q->where(fn($q)=>$q->whereNull('fname')->orWhere('fname','')->orWhereNull('mname')->orWhere('mname','')));
+        $applications=$query->orderBy('candidate_applications.id')->paginate($perPage)->withQueryString();
+        return view('choice.import.index',compact('applications','summary','districts','filters','search','perPage')+['event'=>$choiceEvent,'post'=>$post]);
+    }
+    public function reset(Request $r, ChoiceEvent $choiceEvent, EventPost $post) {
+        abort_unless($r->user()->role===UserRole::Admin,403);
+        abort_unless($post->choice_event_id===$choiceEvent->id,404);
+        $r->validate(['confirmation'=>['required',Rule::in(['DELETE'])]]);
+        DB::transaction(function () use ($r,$choiceEvent,$post) {
+            $event=ChoiceEvent::whereKey($choiceEvent->id)->lockForUpdate()->firstOrFail();
+            if ($event->status!=='DRAFT' || $event->end_at->lt(now())) throw ValidationException::withMessages(['dataset'=>'Dataset reset requires a current Draft event.']);
+            $count=$post->applications()->count();
+            $exclusiveIds=$event->candidates()->whereHas('applications',fn($q)=>$q->where('event_post_id',$post->id))->whereDoesntHave('applications',fn($q)=>$q->where('event_post_id','!=',$post->id))->pluck('id')->all();
+            $submissions=DB::table('choice_submissions')->whereIntegerInRaw('event_candidate_id',$exclusiveIds);
+            $submissionCount=(clone $submissions)->count();
+            DB::table('choice_submission_items')->whereIn('choice_submission_id',(clone $submissions)->select('id'))->delete();
+            $submissions->delete();
+            $post->applications()->delete();
+            DB::table('candidate_imports')->where('event_post_id',$post->id)->delete();
+            $event->candidates()->whereIntegerInRaw('id',$exclusiveIds)->delete();
+            DB::table('choice_audits')->insert(['choice_event_id'=>$event->id,'actor_id'=>$r->user()->id,'action'=>'CANDIDATE_DATASET_RESET','details'=>json_encode(['post_id'=>$post->id,'applications_deleted'=>$count,'candidates_deleted'=>count($exclusiveIds),'submissions_deleted'=>$submissionCount]),'created_at'=>now(),'updated_at'=>now()]);
+        });
+        $r->session()->forget('choice_import.'.$choiceEvent->id.'.'.$post->id);
+        return redirect()->route('choice-import.index',[$choiceEvent,$post])->with('success','Candidate dataset cleared. You can import a new file.');
+    }
+    private function datasetRevision(ChoiceEvent $event,EventPost $post): string {
+        return hash('sha256',json_encode([$post->applications()->count(),$post->applications()->max('id'),DB::table('candidate_imports')->where('event_post_id',$post->id)->max('id'),DB::table('choice_audits')->where('choice_event_id',$event->id)->where('action','CANDIDATE_DATASET_RESET')->max('id')]));
     }
     public function preview(Request $r, ChoiceEvent $choiceEvent, EventPost $post, CandidateCsvReader $reader) {
         $this->check($choiceEvent,$post);
@@ -38,7 +85,7 @@ class CandidateImportController extends Controller {
         $key='choice_import.'.$choiceEvent->id.'.'.$post->id;
         $r->session()->forget($key);
         $nonce=Str::random(40);
-        if (!$result['errors']) $r->session()->put($key,['rows'=>$result['rows'],'filename'=>$r->file('file')->getClientOriginalName(),'expires'=>now()->addMinutes(20)->timestamp,'nonce'=>$nonce]);
+        if (!$result['errors']) $r->session()->put($key,['rows'=>$result['rows'],'filename'=>$r->file('file')->getClientOriginalName(),'expires'=>now()->addMinutes(20)->timestamp,'nonce'=>$nonce,'dataset_revision'=>$this->datasetRevision($choiceEvent,$post)]);
         return view('choice.import.preview',['event'=>$choiceEvent,'post'=>$post,'rows'=>$result['rows'],'importErrors'=>$result['errors'],'nonce'=>$nonce]);
     }
     public function confirm(Request $r, ChoiceEvent $choiceEvent, EventPost $post) {
@@ -47,6 +94,7 @@ class CandidateImportController extends Controller {
         abort_unless($preview && $preview['expires']>=now()->timestamp && hash_equals($preview['nonce'],$r->string('nonce')->toString()),422,'Preview expired. Upload the file again.');
         DB::transaction(function () use ($r,$choiceEvent,$post,$preview) {
             $event=ChoiceEvent::whereKey($choiceEvent->id)->lockForUpdate()->firstOrFail(); $this->check($event,$post);
+            if (!isset($preview['dataset_revision']) || !hash_equals($preview['dataset_revision'],$this->datasetRevision($event,$post))) throw ValidationException::withMessages(['file'=>'The dataset changed after preview. Upload your file again.']);
             foreach ($preview['rows'] as $row) {
                 if ($post->applications()->where(fn($q)=>$q->where('user',$row['user'])->orWhere('reg',$row['reg']))->exists()) throw ValidationException::withMessages(['file'=>'Another import has added these identifiers. Upload again.']);
                 $personKeys=['name','fname','mname','b_date','ssc_roll','ssc_year','hsc_roll','hsc_year','nid'];
