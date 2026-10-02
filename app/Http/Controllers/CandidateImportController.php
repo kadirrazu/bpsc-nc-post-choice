@@ -3,7 +3,7 @@ namespace App\Http\Controllers;
 use App\Models\{ChoiceEvent,EventPost,EventCandidate};
 use App\Enums\UserRole;
 use Illuminate\Validation\Rule;
-use App\Services\Choice\{CandidateCsvReader,CandidateExcelReader};
+use App\Services\Choice\{CandidateCsvReader,CandidateExcelReader,ExportFilename};
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -109,13 +109,15 @@ class CandidateImportController extends Controller {
         return redirect()->route('choice-import.index',[$choiceEvent,$post])->with('success',count($preview['rows']).' candidates imported.');
     }
     public function template(Request $r) {
+        $r->validate(['post_id'=>'nullable|integer|exists:event_posts,id']);
+        $postCode=$r->filled('post_id') ? EventPost::findOrFail($r->input('post_id'))->post_code : null;
         if ($r->query('format')==='xlsx') {
             try { $book=(new CandidateExcelReader)->sample(); }
             catch (\InvalidArgumentException $e) { throw ValidationException::withMessages(['file'=>$e->getMessage()]); }
             return response()->streamDownload(function () use ($book) {
                 try { (new Xlsx($book))->save('php://output'); } finally { $book->disconnectWorksheets(); }
-            },'candidate-import-sample_'.now()->format('Ymd_His').'.xlsx',['Content-Type'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+            },ExportFilename::make('candidate-import-sample',$postCode,'xlsx'),['Content-Type'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
         }
-        return response()->streamDownload(function () { $out=fopen('php://output','w'); fputcsv($out,array_merge(CandidateCsvReader::REQUIRED,CandidateCsvReader::OPTIONAL),',','"',''); fclose($out); },'candidate-import-template.csv',['Content-Type'=>'text/csv']);
+        return response()->streamDownload(function () { $out=fopen('php://output','w'); fputcsv($out,array_merge(CandidateCsvReader::REQUIRED,CandidateCsvReader::OPTIONAL),',','"',''); fclose($out); },ExportFilename::make('candidate-import-template',$postCode,'csv'),['Content-Type'=>'text/csv']);
     }
 }

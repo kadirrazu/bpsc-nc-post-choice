@@ -54,7 +54,7 @@ class ChoiceFoundationTest extends TestCase {
         $nonce=session($key)['nonce'];
         $this->post($prefix.'/confirm',['nonce'=>$nonce])->assertRedirect();
         $this->assertDatabaseHas('candidate_applications',['reg'=>'00123456']);
-        $this->assertDatabaseHas('event_candidates',['b_date'=>'1997-10-10']);
+        $this->assertSame('1997-10-10',\App\Models\EventCandidate::firstOrFail()->b_date->format('Y-m-d'));
         $this->post($prefix.'/confirm',['nonce'=>$nonce])->assertStatus(422);
         $this->assertDatabaseCount('candidate_applications',1);
     }

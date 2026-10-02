@@ -4,4 +4,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4"><h1>{{ $archive ? 'Archived Events' : 'Choice Events' }}</h1><a class="btn btn-primary" href="{{ route('choice-events.create') }}">Create event</a></div>
 <div class="mb-3"><a class="btn {{ !$archive ? 'btn-primary' : 'btn-outline-secondary' }}" href="{{ route('choice-events.index') }}">Current events</a> <a class="btn {{ $archive ? 'btn-primary' : 'btn-outline-secondary' }}" href="{{ route('choice-events.index',['archive'=>1]) }}">Archive</a></div>
 <div class="card"><div class="table-responsive"><table class="table table-vcenter"><thead><tr><th>Event</th><th>Post code</th><th>Unit</th><th>Status</th><th>Submission period (Bangladesh time)</th><th>Posts</th><th>Candidates</th></tr></thead><tbody>@forelse($events as $event)<tr><td><a href="{{ route('choice-events.show',$event) }}">{{ $event->title }}</a></td><td>{{ $event->post_code ?? '—' }}</td><td>{{ $event->unit ?? '—' }}</td><td>{{ $event->lifecycle }}</td><td>{{ $event->start_at->format('d M Y H:i') }} — {{ $event->end_at->format('d M Y H:i') }}</td><td>{{ $event->posts_count }}</td><td>{{ $event->candidates_count }}</td></tr>@empty<tr><td colspan="7" class="text-secondary">No events found.</td></tr>@endforelse</tbody></table></div></div><div class="mt-3">{{ $events->links() }}</div>
+@if(auth()->user()->role===\App\Enums\UserRole::Admin)
+<div class="mt-4 text-end"><a class="btn btn-outline-danger" href="{{ route('choice-data.confirm') }}">Reset All Choice Data</a></div>
+@endif
 @endsection

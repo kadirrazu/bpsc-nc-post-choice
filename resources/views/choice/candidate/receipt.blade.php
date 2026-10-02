@@ -1,7 +1,7 @@
 @extends('choice.candidate.layout')
 @section('content')
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><h2 class="h3 mb-0">Choice Submission Receipt</h2><div class="d-flex flex-wrap gap-2"><a class="btn btn-primary" href="{{ route('candidate.receipt-pdf',$event) }}" target="_blank" rel="noopener">Print / View PDF</a><a class="btn btn-outline-primary" href="{{ route('candidate.receipt-pdf',[$event,'download'=>1]) }}">Download PDF</a></div></div>
-<p class="text-secondary">Your final choices are submitted. Use the PDF for A4 printing with page numbers and print timestamp.</p>
+<div class="public-intro-block d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><h2 class="h3 mb-0">Choice Submission Receipt</h2><div class="d-flex flex-wrap gap-2"><a class="btn btn-primary" href="{{ route('candidate.receipt-pdf',$event) }}" target="_blank" rel="noopener">Print / View PDF</a><a class="btn btn-outline-primary" href="{{ route('candidate.receipt-pdf',[$event,'download'=>1]) }}">Download PDF</a></div></div>
+<p class="public-intro-block text-secondary">Your final choices are submitted. Use the PDF for A4 printing with page numbers and print timestamp.</p>
 <div class="card card-body receipt-screen">@include('choice.candidate.receipt-body')<div class="receipt-screen-footer">Print Timestamp: {{ $printTimestamp }}</div></div>
 <style>
 .receipt-screen { font-size:12pt; }

@@ -13,7 +13,7 @@
 <p class="text-secondary">CSV / XLS / XLSX · Maximum 5 MB and 10,000 rows. Excel uses the first worksheet. Replace the sample row before uploading.</p>
 <p class="text-secondary">Required: user, reg, name, b_date. All other fields, including fname and mname, are optional. Keep identifiers as Text to preserve leading zeros; user/reg allow up to 10 characters.</p>
 <p class="text-secondary">Birth date: DDMMYYYY or DDMMYY. Years 00–{{ config('choice.birth_year_pivot') }} use 20YY; remaining years use 19YY.</p>
-<div class="d-flex flex-wrap gap-2 mb-3"><a class="btn btn-outline-primary" href="{{ route('choice-import.template',['format'=>'xlsx']) }}">Download Sample Excel (XLSX)</a><a class="btn btn-outline-secondary" href="{{ route('choice-import.template') }}">Download CSV Template</a></div>
+<div class="d-flex flex-wrap gap-2 mb-3"><a class="btn btn-outline-primary" href="{{ route('choice-import.template',['format'=>'xlsx','post_id'=>$post->id]) }}">Download Sample Excel (XLSX)</a><a class="btn btn-outline-secondary" href="{{ route('choice-import.template',['post_id'=>$post->id]) }}">Download CSV Template</a></div>
 <label class="form-label" for="file">Candidate file (CSV / XLS / XLSX)</label><input id="file" class="form-control mb-3" type="file" name="file" accept=".csv,.xls,.xlsx" required><button class="btn btn-primary">Validate and Preview</button></form></details>
 @elseif($event->multiple_posts)<div class="alert alert-info">Multiple-post identity matching and import are scheduled for Phase 2.</div>@else<div class="alert alert-info">Import is unavailable for archived or cancelled events.</div>@endif
 <div class="card mb-4"><div class="card-body"><form method="get" action="{{ route('choice-import.index',[$event,$post]) }}"><div class="row g-3">

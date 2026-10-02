@@ -5,6 +5,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 class CandidateSubmissionTest extends TestCase {
     use RefreshDatabase;
+    protected function setUp(): void { parent::setUp(); $this->withoutVite(); }
     private function setupCandidate(): array {
         $user=User::factory()->create();
         $event=ChoiceEvent::create(['title'=>'Available Test','status'=>'PUBLISHED','start_at'=>now()->subHour(),'end_at'=>now()->addHour(),'created_by'=>$user->id]);
@@ -63,5 +64,25 @@ class CandidateSubmissionTest extends TestCase {
         $this->get($prefix.'/receipt.pdf')->assertOk()->assertHeader('Content-Type','application/pdf');
         $this->post($prefix.'/sign-out');
         $this->get($prefix.'/receipt.pdf')->assertForbidden();
+    }
+    public function test_valid_candidate_session_bypasses_sign_in_form_and_routes_by_status(): void {
+        [$event,$person,$one]=$this->setupCandidate(); $prefix='/candidate/events/'.$event->id;
+        $this->post($prefix.'/sign-in',['user'=>'USER01','birth_date'=>'10101997'])->assertRedirect();
+        $this->get($prefix.'/sign-in')->assertRedirect($prefix.'/choices');
+        $this->get($prefix.'/choices')->assertOk()->assertSee('Candidate Sign Out')->assertDontSee('Candidate Sign In');
+        $this->post($prefix.'/review',['choices'=>[$one->id]])->assertOk();
+        $nonce=session('candidate_review.'.$event->id)['nonce'];
+        $this->post($prefix.'/submit',['nonce'=>$nonce,'confirm'=>1])->assertRedirect();
+        $this->get($prefix.'/sign-in')->assertRedirect($prefix.'/choices');
+        $this->get($prefix.'/choices')->assertOk()->assertSee('Choice Submission Receipt');
+        $event->update(['end_at'=>now()->subMinute()]);
+        $this->get($prefix.'/sign-in')->assertRedirect($prefix.'/choices');
+        $this->get($prefix.'/choices')->assertOk()->assertSee('Choice Submission Receipt');
+    }
+    public function test_expired_session_is_cleared_and_sign_in_form_has_no_sign_out(): void {
+        [$event,$person]=$this->setupCandidate();
+        $key='candidate_access.'.$event->id;
+        $response=$this->withSession([$key=>['candidate_id'=>$person->id,'expires'=>now()->subMinute()->timestamp]])->get('/candidate/events/'.$event->id.'/sign-in');
+        $response->assertOk()->assertSee('Candidate Sign In')->assertDontSee('Candidate Sign Out')->assertSessionMissing($key);
     }
 }

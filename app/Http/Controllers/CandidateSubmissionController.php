@@ -1,7 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 use App\Models\{ChoiceEvent,EventCandidate,CandidateApplication};
-use App\Services\Choice\{BirthDateNormalizer,SubmissionReceiptPdf};
+use App\Services\Choice\{BirthDateNormalizer,SubmissionReceiptPdf,ExportFilename,ReceiptQrCode,SubmissionReceiptData};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -11,9 +11,13 @@ class CandidateSubmissionController extends Controller {
         abort_unless($event->status==='PUBLISHED' && $event->start_at->lte(now()) && $event->end_at->gte(now()),403,'This event is not accepting choices now.');
     }
     private function key(ChoiceEvent $event): string { return 'candidate_access.'.$event->id; }
-    private function person(Request $r,ChoiceEvent $event): EventCandidate {
+    private function signedInPerson(Request $r,ChoiceEvent $event): ?EventCandidate {
         $access=$r->session()->get($this->key($event));
-        $person=$access && $access['expires']>=now()->timestamp ? $event->candidates()->find($access['candidate_id']) : null;
+        if (!is_array($access) || !isset($access['expires'],$access['candidate_id']) || !is_numeric($access['candidate_id']) || (int)$access['candidate_id']<1 || !is_numeric($access['expires']) || (int)$access['expires']<now()->timestamp) return null;
+        return $event->candidates()->find((int)$access['candidate_id']);
+    }
+    private function person(Request $r,ChoiceEvent $event): EventCandidate {
+        $person=$this->signedInPerson($r,$event);
         if (!$person) abort(403,'Your candidate session expired. Return to the event sign-in page.');
         return $person;
     }
@@ -23,16 +27,19 @@ class CandidateSubmissionController extends Controller {
     private function existing(EventCandidate $person) {
         return DB::table('choice_submissions')->where('event_candidate_id',$person->id)->where('status','SUBMITTED')->first();
     }
-    public function login(ChoiceEvent $choiceEvent) {
+    public function login(Request $r,ChoiceEvent $choiceEvent) {
+        if ($this->signedInPerson($r,$choiceEvent)) return redirect()->route('candidate.choices',$choiceEvent);
+        $r->session()->forget([$this->key($choiceEvent),'candidate_review.'.$choiceEvent->id]);
         $this->available($choiceEvent);
         return view('choice.candidate.login',['event'=>$choiceEvent]);
     }
     public function authenticate(Request $r,ChoiceEvent $choiceEvent) {
+        if ($this->signedInPerson($r,$choiceEvent)) return redirect()->route('candidate.choices',$choiceEvent);
         $this->available($choiceEvent);
         $data=$r->validate(['user'=>'required|string|max:10','birth_date'=>['required','string','regex:/^\d{8}$/D']]);
         try { $date=(new BirthDateNormalizer)->normalize($data['birth_date']); }
         catch (\InvalidArgumentException $e) { throw ValidationException::withMessages(['credentials'=>'User ID and birth date did not match.']); }
-        $matches=CandidateApplication::with('candidate')->whereHas('candidate',fn($q)=>$q->where('choice_event_id',$choiceEvent->id)->where('b_date',$date))->whereHas('post',fn($q)=>$q->where('choice_event_id',$choiceEvent->id))->where('user',$data['user'])->get()->filter(fn($app)=>hash_equals((string)$app->user,$data['user']));
+        $matches=CandidateApplication::with('candidate')->whereHas('candidate',fn($q)=>$q->where('choice_event_id',$choiceEvent->id)->whereDate('b_date',$date))->whereHas('post',fn($q)=>$q->where('choice_event_id',$choiceEvent->id))->where('user',$data['user'])->get()->filter(fn($app)=>hash_equals((string)$app->user,$data['user']));
         $ids=$matches->pluck('event_candidate_id')->unique();
         if ($ids->count()!==1) throw ValidationException::withMessages(['credentials'=>'User ID and birth date did not match.']);
         $r->session()->regenerate();
@@ -74,7 +81,7 @@ class CandidateSubmissionController extends Controller {
             if (!hash_equals($review['revision'],hash('sha256',$options->toJson()))) throw ValidationException::withMessages(['choices'=>'Applicable choices changed. Review your choices again.']);
             $selected=collect($review['ids'])->map(fn($id)=>$options[$id]);
             $application=$this->application($r,$event,$person);
-            $snapshot=['user'=>$application?->user,'reg'=>$application?->reg,'name'=>$person->name,'fname'=>$person->fname,'b_date'=>$person->b_date->format('Y-m-d')];
+            $snapshot=['user'=>$application?->user,'reg'=>$application?->reg,'name'=>$person->name,'fname'=>$person->fname,'mname'=>$person->mname,'b_date'=>$person->b_date->format('Y-m-d')];
             $token=strtoupper(bin2hex(random_bytes(16)));
             $id=DB::table('choice_submissions')->insertGetId(['event_candidate_id'=>$person->id,'submitted_choices'=>$selected->pluck('code')->implode('|'),'unselected_choices'=>$options->except($review['ids'])->pluck('code')->implode('|'),'token'=>$token,'active_slot'=>1,'status'=>'SUBMITTED','submitted_at'=>now(),'submitted_ip'=>$r->ip(),'candidate_snapshot'=>json_encode($snapshot),'created_at'=>now(),'updated_at'=>now()]);
             foreach ($review['ids'] as $position=>$choiceId) DB::table('choice_submission_items')->insert(['choice_submission_id'=>$id,'choice_option_id'=>$choiceId,'preference_order'=>$position+1]);
@@ -87,26 +94,20 @@ class CandidateSubmissionController extends Controller {
         return (clone $query)->whereKey($r->session()->get($this->key($event).'.application_id'))->first() ?? $query->orderBy('id')->first();
     }
     private function receiptData(Request $r,ChoiceEvent $event,EventCandidate $person,$submission): array {
-        $application=$this->application($r,$event,$person);
-        $details=$submission->candidate_snapshot ? json_decode($submission->candidate_snapshot,true) : null;
-        $details ??= ['user'=>$application?->user,'reg'=>$application?->reg,'name'=>$person->name,'fname'=>$person->fname,'b_date'=>$person->b_date->format('Y-m-d')];
-        $details['dob']=\Illuminate\Support\Carbon::parse($details['b_date'])->format('d-m-Y');
-        $details['token']=$submission->token;
-        $details['submitted_at']=\Illuminate\Support\Carbon::parse($submission->submitted_at)->format('d M Y, h:i:s A').' (UTC+06:00)';
-        $details['submitted_from']=$submission->submitted_ip;
-        $items=DB::table('choice_submission_items')->join('choice_options','choice_options.id','=','choice_submission_items.choice_option_id')->where('choice_submission_id',$submission->id)->orderBy('preference_order')->get(['preference_order','code','title']);
-        $printTimestamp=now('Asia/Dhaka')->format('d M Y, h:i:s A').' (UTC+06:00)';
-        return compact('event','person','submission','items','details','printTimestamp');
+        $applicationId=$r->session()->get($this->key($event).'.application_id');
+        return (new SubmissionReceiptData)->build($event,$person,$submission,$applicationId ? (int)$applicationId : null);
     }
+
     private function receipt(Request $r,ChoiceEvent $event,EventCandidate $person,$submission) {
         return view('choice.candidate.receipt',$this->receiptData($r,$event,$person,$submission));
     }
-    public function pdf(Request $r,ChoiceEvent $choiceEvent,SubmissionReceiptPdf $pdf) {
+    public function pdf(Request $r,ChoiceEvent $choiceEvent,SubmissionReceiptPdf $pdf,ReceiptQrCode $qr) {
         $person=$this->person($r,$choiceEvent); $submission=$this->existing($person);
         abort_unless($submission,404,'No submitted choices found.');
         $data=$this->receiptData($r,$choiceEvent,$person,$submission);
+        $data['qrDataUri']=$qr->dataUri($data['details']);
         $bytes=$pdf->render(view('choice.candidate.receipt-pdf',$data)->render(),$data['printTimestamp']);
-        $filename='choice-receipt-'.$choiceEvent->id.'-'.now()->format('Ymd_His').'.pdf';
+        $filename=ExportFilename::make('choice-receipt',$choiceEvent->post_code,'pdf');
         return response($bytes,200,['Content-Type'=>'application/pdf','Content-Disposition'=>($r->boolean('download') ? 'attachment' : 'inline').'; filename="'.$filename.'"','Cache-Control'=>'private, no-store']);
     }
     public function logout(Request $r,ChoiceEvent $choiceEvent) {

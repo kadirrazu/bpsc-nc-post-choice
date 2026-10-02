@@ -1,7 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 use App\Models\{ChoiceEvent,EventPost};
-use App\Services\Choice\{ChoiceEditor,ChoiceWorkbook};
+use App\Services\Choice\{ChoiceEditor,ChoiceWorkbook,ExportFilename};
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +18,7 @@ class ChoiceEditorController extends Controller {
         $book=$workbook->sample();
         return response()->streamDownload(function () use ($book) {
             try { (new Xlsx($book))->save('php://output'); } finally { $book->disconnectWorksheets(); }
-        },'choice-options-sample_'.now()->format('Ymd_His').'.xlsx',['Content-Type'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        },ExportFilename::make('choice-options-sample',$post->post_code,'xlsx'),['Content-Type'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
     public function preview(Request $r,ChoiceEvent $choiceEvent,EventPost $post,ChoiceEditor $editor,ChoiceWorkbook $workbook) {
         $editor->editable($choiceEvent,$post);

@@ -3,7 +3,8 @@ namespace App\Services\Choice;
 use Dompdf\{Dompdf,Options};
 use Illuminate\Validation\ValidationException;
 class SubmissionReceiptPdf {
-    public function render(string $html,string $printTimestamp): string {
+    public function render(string $html,string $printTimestamp,string $signatureLabel="Candidate's Signature"): string {
+        if (str_contains($html,'class="choice-title-bn"')) return (new BanglaReceiptPdf)->render($html,$printTimestamp,$signatureLabel);
         if (!class_exists(Dompdf::class)) throw ValidationException::withMessages(['pdf'=>'PDF support requires: composer require dompdf/dompdf']);
         $options=new Options;
         $options->set('isRemoteEnabled',false); $options->set('isPhpEnabled',false);
@@ -28,20 +29,29 @@ class SubmissionReceiptPdf {
             if (!$pdf->getFontMetrics()->registerFont(['family'=>'Times New Roman','style'=>'normal','weight'=>$weight],$uri)) throw new \RuntimeException('Cannot register PDF font '.$file.'. Check that the font file is valid and storage/app/dompdf-font-cache is writable.');
         }
         $pdf->setPaper('A4','portrait'); $pdf->loadHtml($html,'UTF-8'); $pdf->render();
-        $pdf->getCanvas()->page_script(function ($pageNumber,$pageCount,$canvas,$fontMetrics) use ($printTimestamp) {
+        $pdf->getCanvas()->page_script(function ($pageNumber,$pageCount,$canvas,$fontMetrics) use ($printTimestamp,$signatureLabel) {
             $font=$fontMetrics->getFont('Times New Roman','normal'); $size=10; $color=[0.25,0.25,0.25];
             // 75% black on white; half-inch outer boundary on every page.
             $margin=36; $y=$canvas->get_height()-$margin-11;
             $right=$canvas->get_width()-$margin;
             $signatureY=$y-34;
             $canvas->line($right-150,$signatureY,$right,$signatureY,[0,0,0],0.5);
-            $label="Candidate's Signature";
+            $label=$signatureLabel;
             $labelWidth=$fontMetrics->getTextWidth($label,$font,11);
             $canvas->text($right-75-$labelWidth/2,$signatureY+4,$label,$font,11,[0,0,0]);
             $canvas->text($margin,$y,'Print Timestamp: '.$printTimestamp,$font,$size,$color);
             $text='Page '.$pageNumber.' of '.$pageCount;
             $width=$fontMetrics->getTextWidth($text,$font,$size);
             $canvas->text($canvas->get_width()-$margin-$width,$y,$text,$font,$size,$color);
+            // Vertical credit sits entirely inside the left margin, near the bottom.
+            $creditX=17; $creditY=$canvas->get_height()-96;
+            $prefix='Software Developed By: '; $creditSize=8;
+            $bold=$fontMetrics->getFont('Times New Roman','bold');
+            $prefixWidth=$fontMetrics->getTextWidth($prefix,$font,$creditSize);
+            $canvas->save(); $canvas->set_opacity(0.65); $canvas->rotate(-90,$creditX,$creditY);
+            $canvas->text($creditX,$creditY,$prefix,$font,$creditSize,[0,0,0]);
+            $canvas->text($creditX+$prefixWidth,$creditY,'IT Section, BPSC',$bold,$creditSize,[0,0,0]);
+            $canvas->restore(); $canvas->set_opacity(1.0);
         });
         return $pdf->output();
     }

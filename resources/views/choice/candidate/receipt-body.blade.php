@@ -5,5 +5,5 @@
 </tbody></table>
 <h2>Final Submitted Choices</h2>
 <table class="receipt-choices"><thead><tr><th class="receipt-number receipt-choice-heading" style="width:15%;text-align:center;vertical-align:middle;white-space:nowrap">Preference</th><th class="receipt-number receipt-choice-heading" style="width:17%;text-align:center;vertical-align:middle;white-space:nowrap">Choice Code</th><th>Choice Title</th></tr></thead><tbody>
-@foreach($items as $item)<tr><td class="receipt-number" style="text-align:center;vertical-align:middle">{{ $item->preference_order }}</td><td class="receipt-number" style="text-align:center;vertical-align:middle">{{ $item->code }}</td><td>{{ $item->title }}</td></tr>@endforeach
+@foreach($items as $item)<tr><td class="receipt-number" style="text-align:center;vertical-align:middle">{{ $item->preference_order }}</td><td class="receipt-number" style="text-align:center;vertical-align:middle">{{ $item->code }}</td><td><span data-choice-title class="{{ preg_match('/[\x{0980}-\x{09FF}]/u',$item->title) ? 'choice-title-bn' : '' }}">{{ $item->title }}</span></td></tr>@endforeach
 </tbody></table>

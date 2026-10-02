@@ -1,6 +1,6 @@
 <?php
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\{UserController,ChoiceEventController,CandidateImportController,ChoiceEditorController,CandidateSubmissionController};
+use App\Http\Controllers\{UserController,ChoiceEventController,CandidateImportController,ChoiceEditorController,CandidateSubmissionController,ChoiceSubmissionAdminController,ChoiceExportController,ChoiceDataResetController};
 use App\Http\Middleware\ChoiceStaff;
 use App\Models\ChoiceEvent;
 Route::get('/', fn()=>view('choice.public.home',['events'=>ChoiceEvent::available()->orderBy('end_at')->get()]))->name('home');
@@ -15,6 +15,18 @@ Route::middleware('auth')->group(function () {
     Route::view('/dashboard','dashboard.index')->name('dashboard');
     Route::resource('users',UserController::class)->except('destroy');
     Route::middleware(ChoiceStaff::class)->group(function () {
+        Route::get('/choice-data/reset',[ChoiceDataResetController::class,'confirm'])->name('choice-data.confirm');
+        Route::delete('/choice-data/reset',[ChoiceDataResetController::class,'destroy'])->name('choice-data.destroy');
+        Route::get('/choice-events/{choiceEvent}/submissions',[ChoiceSubmissionAdminController::class,'index'])->name('choice-submissions.index');
+        Route::get('/choice-events/{choiceEvent}/submissions/{submission}/receipt.pdf',[ChoiceSubmissionAdminController::class,'receipt'])->name('choice-submissions.receipt');
+        Route::get('/choice-events/{choiceEvent}/submissions/{submission}/delete-confirm',[ChoiceSubmissionAdminController::class,'confirmDelete'])->name('choice-submissions.confirm-delete');
+        Route::get('/choice-events/{choiceEvent}/submissions-clear-confirm',[ChoiceSubmissionAdminController::class,'confirmClear'])->name('choice-submissions.confirm-clear');
+        Route::delete('/choice-events/{choiceEvent}/submissions/{submission}',[ChoiceSubmissionAdminController::class,'destroy'])->name('choice-submissions.destroy');
+        Route::delete('/choice-events/{choiceEvent}/submissions',[ChoiceSubmissionAdminController::class,'clear'])->name('choice-submissions.clear');
+        Route::post('/choice-events/{choiceEvent}/submissions/{submission}/cancel',[ChoiceSubmissionAdminController::class,'cancel'])->name('choice-submissions.cancel');
+        Route::get('/choice-events/{choiceEvent}/record/{format}',[ChoiceExportController::class,'record'])->name('choice-exports.record');
+        Route::get('/choice-events/{choiceEvent}/candidate-export/{format}',[ChoiceExportController::class,'candidates'])->name('choice-exports.candidates');
+
         Route::get('/choice-events', [ChoiceEventController::class,'index'])->name('choice-events.index');
         Route::get('/choice-events/create', [ChoiceEventController::class,'create'])->name('choice-events.create');
         Route::post('/choice-events', [ChoiceEventController::class,'store'])->name('choice-events.store');

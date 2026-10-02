@@ -17,6 +17,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
     @stack('styles')
+@include('choice.shared.fonts')
 </head>
 
 <body>
