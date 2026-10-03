@@ -47,6 +47,8 @@ class DesignationSeeder extends Seeder
             ],
         ];
 
+        $designations[]=['name'=>'Data Entry Operator','slug'=>'data-entry-operator','sort_order'=>8];
+
         foreach ($designations as $designation) {
             Designation::updateOrCreate(
                 ['slug' => $designation['slug']],

@@ -11,7 +11,7 @@ class UpdateUserRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->is_active && $this->user()->role===UserRole::Admin;
     }
 
     public function rules(): array
@@ -41,7 +41,7 @@ class UpdateUserRequest extends FormRequest
 
             'role' => [
                 'required',
-                Rule::enum(UserRole::class),
+                Rule::in([UserRole::Admin->value,UserRole::Operator->value]),
             ],
 
             'password' => [

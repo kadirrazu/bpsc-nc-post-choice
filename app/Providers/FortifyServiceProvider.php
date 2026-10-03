@@ -35,6 +35,13 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::redirectUserForTwoFactorAuthenticationUsing(RedirectIfTwoFactorAuthenticatable::class);
 
+        Fortify::authenticateUsing(function (Request $request) {
+            $user=\App\Models\User::where('email',$request->input('email'))->first();
+            if (!$user || !$user->is_active || !in_array($user->role,[\App\Enums\UserRole::Admin,\App\Enums\UserRole::Operator],true) || !\Illuminate\Support\Facades\Hash::check((string)$request->input('password'),$user->password)) return null;
+            $user->forceFill(['last_login_at'=>now()])->save();
+            return $user;
+        });
+
         Fortify::loginView(function () {
             return view('auth.login');
         });

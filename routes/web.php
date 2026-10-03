@@ -1,6 +1,6 @@
 <?php
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\{UserController,ChoiceEventController,CandidateImportController,ChoiceEditorController,CandidateSubmissionController,ChoiceSubmissionAdminController,ChoiceExportController,ChoiceDataResetController};
+use App\Http\Controllers\{UserController,ChoiceEventController,CandidateImportController,ChoiceEditorController,CandidateSubmissionController,ChoiceSubmissionAdminController,ChoiceExportController,ChoiceDataResetController,StaffProfileController,SubmissionStatusController};
 use App\Http\Middleware\ChoiceStaff;
 use App\Models\ChoiceEvent;
 Route::get('/', fn()=>view('choice.public.home',['events'=>ChoiceEvent::available()->orderBy('end_at')->get()]))->name('home');
@@ -12,8 +12,16 @@ Route::post('/candidate/events/{choiceEvent}/review',[CandidateSubmissionControl
 Route::post('/candidate/events/{choiceEvent}/submit',[CandidateSubmissionController::class,'submit'])->middleware('throttle:10,1')->name('candidate.submit');
 Route::post('/candidate/events/{choiceEvent}/sign-out',[CandidateSubmissionController::class,'logout'])->name('candidate.logout');
 Route::middleware('auth')->group(function () {
-    Route::view('/dashboard','dashboard.index')->name('dashboard');
-    Route::resource('users',UserController::class)->except('destroy');
+    Route::get('/dashboard',fn()=>auth()->user()->role===\App\Enums\UserRole::Operator ? redirect()->route('submission-status.index') : view('dashboard.index'))->name('dashboard');
+    Route::middleware(\App\Http\Middleware\Administrator::class)->group(function () {
+        Route::get('/users/{user}/delete-confirm',[UserController::class,'confirmDelete'])->name('users.confirm-delete');
+        Route::resource('users',UserController::class);
+    });
+    Route::get('/profile',[StaffProfileController::class,'edit'])->name('staff-profile.edit');
+    Route::put('/profile',[StaffProfileController::class,'update'])->name('staff-profile.update');
+    Route::get('/profile/password',[StaffProfileController::class,'password'])->name('staff-profile.password');
+    Route::put('/profile/password',[StaffProfileController::class,'updatePassword'])->name('staff-profile.update-password');
+    Route::get('/submission-status',[SubmissionStatusController::class,'index'])->name('submission-status.index');
     Route::middleware(ChoiceStaff::class)->group(function () {
         Route::get('/choice-data/reset',[ChoiceDataResetController::class,'confirm'])->name('choice-data.confirm');
         Route::delete('/choice-data/reset',[ChoiceDataResetController::class,'destroy'])->name('choice-data.destroy');
