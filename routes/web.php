@@ -39,6 +39,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/choice-events/create', [ChoiceEventController::class,'create'])->name('choice-events.create');
         Route::post('/choice-events', [ChoiceEventController::class,'store'])->name('choice-events.store');
         Route::get('/choice-events/{choiceEvent}', [ChoiceEventController::class,'show'])->name('choice-events.show');
+        Route::get('/choice-events/{choiceEvent}/close-confirm', [ChoiceEventController::class,'confirmClose'])->name('choice-events.confirm-close');
+        Route::post('/choice-events/{choiceEvent}/close', [ChoiceEventController::class,'close'])->name('choice-events.close');
         Route::get('/choice-events/{choiceEvent}/edit', [ChoiceEventController::class,'edit'])->name('choice-events.edit');
         Route::put('/choice-events/{choiceEvent}', [ChoiceEventController::class,'update'])->name('choice-events.update');
         Route::delete('/choice-events/{choiceEvent}', [ChoiceEventController::class,'destroy'])->name('choice-events.destroy');

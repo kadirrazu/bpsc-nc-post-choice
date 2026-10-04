@@ -59,7 +59,7 @@ class ChoiceWorkbook {
         $row=1;
         foreach ($metadata as $label=>$value) {
             $eventSheet->setCellValueExplicit([1,$row],$label,DataType::TYPE_STRING);
-            $eventSheet->setCellValueExplicit([2,$row],(string)$value,DataType::TYPE_STRING); $row++;
+            $eventSheet->setCellValueExplicit([2,$row],$value,is_int($value) ? DataType::TYPE_NUMERIC : DataType::TYPE_STRING); $row++;
         }
         $eventSheet->getColumnDimension('A')->setWidth(24); $eventSheet->getColumnDimension('B')->setWidth(85);
         $eventSheet->getStyle('A1:A'.($row-1))->getFont()->setBold(true);

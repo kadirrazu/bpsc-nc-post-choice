@@ -33,6 +33,8 @@ tr { page-break-inside:avoid; }
 </style></head><body><header><h1>Bangladesh Public Service Commission (BPSC)</h1><p>Choice Event Administrative Record</p><p><strong>{{ $event->title }}</strong></p><p>Post Code: {{ $event->post_code }} | {{ $event->unit }}</p><hr></header>
 <h2>Event Information</h2><table class="receipt-details"><tbody>
 <tr><th>Event Title</th><td>{{ $event->title }}</td></tr><tr><th>Post Code</th><td>{{ $event->post_code }}</td></tr><tr><th>Unit</th><td>{{ $event->unit }}</td></tr><tr><th>Status</th><td>{{ $event->status }}</td></tr>
+<tr><th>Total Candidates</th><td>{{ number_format($summary['total_candidates']) }}</td></tr>
+<tr><th>Submitted Candidates</th><td>{{ number_format($summary['submitted_candidates']) }}</td></tr>
 <tr><th>Schedule</th><td>{{ $event->start_at->format('d M Y H:i') }} — {{ $event->end_at->format('d M Y H:i') }} (Bangladesh time)</td></tr>
 @if($event->instructions)<tr><th>Instructions</th><td>{{ $event->instructions }}</td></tr>@endif
 </tbody></table><h2>Choice Code Reference</h2>

@@ -26,6 +26,23 @@ class ChoiceEventController extends Controller {
         $choiceEvent->load(['posts'=>fn($q)=>$q->withCount('applications')->with('choices')]);
         return view('choice.events.show',['event'=>$choiceEvent]);
     }
+    public function confirmClose(Request $r, ChoiceEvent $choiceEvent) {
+        abort_unless($r->user()->role===UserRole::Admin,403);
+        abort_unless($choiceEvent->status==='PUBLISHED' && $choiceEvent->end_at->gte(now()),403,'Only current published events can be closed.');
+        return view('choice.events.close',['event'=>$choiceEvent]);
+    }
+    public function close(Request $r, ChoiceEvent $choiceEvent) {
+        abort_unless($r->user()->role===UserRole::Admin,403);
+        $r->validate(['confirmation'=>['required',Rule::in(['CLOSE'])]]);
+        DB::transaction(function () use ($r,$choiceEvent) {
+            // Use the same event lock as candidate submission to serialize closing and submission.
+            $event=ChoiceEvent::whereKey($choiceEvent->id)->lockForUpdate()->firstOrFail();
+            abort_unless($event->status==='PUBLISHED' && $event->end_at->gte(now()),403,'Only current published events can be closed.');
+            $event->update(['status'=>'CLOSED']);
+            $this->audit($r,$event,'EVENT_CLOSED',['old_status'=>'PUBLISHED','new_status'=>'CLOSED']);
+        });
+        return redirect()->route('choice-events.show',$choiceEvent)->with('success','Event closed. New choice submissions are now blocked.');
+    }
     public function edit(ChoiceEvent $choiceEvent) {
         abort_if($choiceEvent->lifecycle==='ARCHIVED',403,'Archived events are read-only.');
         return view('choice.events.form',['event'=>$choiceEvent]);

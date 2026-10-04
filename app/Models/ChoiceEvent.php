@@ -14,8 +14,9 @@ class ChoiceEvent extends Model {
         $units['Non Cadre (Exam)']='Non Cadre (Exam)';
         return $units;
     }
-    public static function statusOptions(): array { return ['DRAFT'=>'Draft','PUBLISHED'=>'Published','ARCHIVED'=>'Archived','CANCELLED'=>'Cancelled']; }
+    public static function statusOptions(): array { return ['DRAFT'=>'Draft','PUBLISHED'=>'Published','CLOSED'=>'Closed','ARCHIVED'=>'Archived','CANCELLED'=>'Cancelled']; }
     public function getLifecycleAttribute(): string {
+        if ($this->status==='CLOSED') return 'CLOSED';
         if ($this->status==='CANCELLED') return 'CANCELLED';
         if ($this->status==='ARCHIVED' || $this->end_at->lt(now())) return 'ARCHIVED';
         return $this->status==='PUBLISHED' && $this->start_at->gt(now()) ? 'SCHEDULED' : $this->status;

@@ -154,4 +154,82 @@ class ChoiceAdministrationTest extends TestCase {
         $this->assertDatabaseHas('users',['id'=>$other->id]);
         $this->assertDatabaseHas('users',['id'=>$operator->id]);
     }
+    public function test_event_record_counts_unique_candidates_and_excludes_cancelled_history(): void {
+        [$admin,$event,$person,$option]=$this->fixture(); $active=$this->submission($person,$option);
+        $extraPost=$event->posts()->create(['post_code'=>'260031','title'=>'Second Post']);
+        $extraPost->applications()->create(['event_candidate_id'=>$person->id,'user'=>'USER02','reg'=>'00002345']);
+        $cancelledPerson=$event->candidates()->create(['name'=>'Cancelled Candidate','b_date'=>'1997-10-10']);
+        $cancelled=$this->submission($cancelledPerson,$option);
+        DB::table('choice_submissions')->where('id',$cancelled)->update(['status'=>'CANCELLED','active_slot'=>null]);
+        $event->candidates()->create(['name'=>'Pending Candidate','b_date'=>'1997-10-10']);
+        [$otherAdmin,$otherEvent,$otherPerson,$otherOption]=$this->fixture(); $this->submission($otherPerson,$otherOption);
+        $this->assertSame(['total_candidates'=>3,'submitted_candidates'=>1],(new ChoiceExportData)->summary($event));
+        $response=$this->actingAs($admin)->get(route('choice-exports.record',[$event,'xlsx']))->assertOk();
+        $path=$response->baseResponse->getFile()->getPathname();
+        try {
+            $book=\PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+            $rows=$book->getSheetByName('Event')->toArray(); $metadata=array_column($rows,1,0);
+            $this->assertSame('3',$metadata['Total candidates']);
+            $this->assertSame(3,$book->getSheetByName('Event')->getCell('B7')->getValue());
+            $this->assertSame(\PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC,$book->getSheetByName('Event')->getCell('B7')->getDataType());
+            $this->assertSame('1',$metadata['Submitted candidates']);
+            $this->assertSame('260030',$metadata['Post code']);
+            $this->assertSame(['Event','Choices'],$book->getSheetNames());
+        } finally { @unlink($path); }
+        $this->mock(\App\Services\Choice\SubmissionReceiptPdf::class,function ($mock) {
+            $mock->shouldReceive('render')->once()->withArgs(function ($html,$stamp,$signature) {
+                $this->assertStringContainsString('<th>Total Candidates</th><td>3</td>',$html);
+                $this->assertStringContainsString('<th>Submitted Candidates</th><td>1</td>',$html);
+                return $signature==="Administrator's Signature";
+            })->andReturn('%PDF-1.7 test');
+        });
+        $this->get(route('choice-exports.record',[$event,'pdf']))->assertOk()->assertHeader('Content-Type','application/pdf');
+        DB::table('choice_submissions')->where('id',$active)->update(['status'=>'CANCELLED','active_slot'=>null]);
+        $this->assertSame(0,(new ChoiceExportData)->summary($event)['submitted_candidates']);
+        $empty=ChoiceEvent::create(['title'=>'Empty Event','status'=>'DRAFT','start_at'=>now(),'end_at'=>now()->addDay(),'created_by'=>$admin->id]);
+        $this->assertSame(['total_candidates'=>0,'submitted_candidates'=>0],(new ChoiceExportData)->summary($empty));
+    }
+    public function test_closing_event_blocks_reviewed_submission_without_changing_schedule_or_records(): void {
+        [$admin,$event,$person,$option]=$this->fixture(); $end=$event->end_at->toDateTimeString();
+        $prefix='/candidate/events/'.$event->id;
+        $this->post($prefix.'/sign-in',['user'=>'USER01','birth_date'=>'10101997'])->assertRedirect();
+        $this->post($prefix.'/review',['choices'=>[$option->id]])->assertOk();
+        $nonce=session('candidate_review.'.$event->id)['nonce'];
+        $this->actingAs($admin)->get(route('choice-events.show',$event))->assertOk()->assertSee('Mark as Closed');
+        $this->get(route('choice-events.confirm-close',$event))->assertOk()->assertSee('Confirm Close');
+        $this->post(route('choice-events.close',$event),[])->assertSessionHasErrors('confirmation');
+        $this->assertSame('PUBLISHED',$event->fresh()->status);
+        $this->post(route('choice-events.close',$event),['confirmation'=>'CLOSE'])->assertRedirect(route('choice-events.show',$event));
+        $this->assertSame('CLOSED',$event->fresh()->status);
+        $this->assertSame('CLOSED',$event->fresh()->lifecycle);
+        $this->assertSame($end,$event->fresh()->end_at->toDateTimeString());
+        $this->assertDatabaseHas('choice_audits',['choice_event_id'=>$event->id,'actor_id'=>$admin->id,'action'=>'EVENT_CLOSED']);
+        $this->get('/')->assertOk()->assertDontSee('Test Event');
+        $this->get($prefix.'/choices')->assertForbidden();
+        $this->post($prefix.'/review',['choices'=>[$option->id]])->assertForbidden();
+        $this->post($prefix.'/submit',['nonce'=>$nonce,'confirm'=>1])->assertForbidden();
+        $this->assertDatabaseCount('choice_submissions',0);
+        $this->assertDatabaseHas('event_candidates',['id'=>$person->id]);
+        $this->assertDatabaseHas('choice_options',['id'=>$option->id]);
+        $this->post($prefix.'/sign-out');
+        $this->post($prefix.'/sign-in',['user'=>'USER01','birth_date'=>'10101997'])->assertForbidden();
+        $event->update(['end_at'=>now()->subMinute()]);
+        $this->assertSame('CLOSED',$event->fresh()->lifecycle);
+    }
+    public function test_close_requires_administrator_and_receipt_remains_accessible_after_closing(): void {
+        [$admin,$event,$person,$option]=$this->fixture(); $id=$this->submission($person,$option);
+        $operator=User::factory()->create(['role'=>UserRole::Operator,'is_active'=>true]);
+        $this->actingAs($operator)->get(route('choice-events.confirm-close',$event))->assertForbidden();
+        $this->post(route('choice-events.close',$event),['confirmation'=>'CLOSE'])->assertForbidden();
+        $this->assertSame('PUBLISHED',$event->fresh()->status);
+        $this->post('/candidate/events/'.$event->id.'/sign-in',['user'=>'USER01','birth_date'=>'10101997'])->assertRedirect();
+        $this->actingAs($admin)->post(route('choice-events.close',$event),['confirmation'=>'CLOSE'])->assertRedirect();
+        $this->get('/candidate/events/'.$event->id.'/choices')->assertOk()->assertSee('Choice Submission Receipt');
+        $this->assertDatabaseHas('choice_submissions',['id'=>$id,'status'=>'SUBMITTED']);
+        $this->post(route('choice-events.close',$event),['confirmation'=>'CLOSE'])->assertForbidden();
+        $event->update(['status'=>'DRAFT']);
+        $this->post(route('choice-events.close',$event),['confirmation'=>'CLOSE'])->assertForbidden();
+        $this->put(route('choice-events.update',$event),['title'=>$event->title,'post_code'=>$event->post_code,'unit'=>$event->unit,'status'=>'CLOSED','start_at'=>$event->start_at->format('Y-m-d\TH:i'),'end_at'=>$event->end_at->format('Y-m-d\TH:i')])->assertRedirect();
+        $this->assertSame('CLOSED',$event->fresh()->status);
+    }
 }

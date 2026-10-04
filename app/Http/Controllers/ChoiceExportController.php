@@ -12,14 +12,14 @@ class ChoiceExportController extends Controller {
     }
     public function record(Request $r,ChoiceEvent $choiceEvent,string $format,ChoiceExportData $data,ChoiceWorkbook $workbook,SubmissionReceiptPdf $pdf) {
         abort_unless(in_array($format,['xlsx','pdf'],true),404);
-        $rows=$data->choices($choiceEvent); $stamp=now('Asia/Dhaka')->format('d M Y, h:i:s A').' (UTC+06:00)';
+        $summary=$data->summary($choiceEvent); $rows=$data->choices($choiceEvent); $stamp=now('Asia/Dhaka')->format('d M Y, h:i:s A').' (UTC+06:00)';
         $filename=ExportFilename::make('event-record',$choiceEvent->post_code,$format);
         if ($format==='pdf') {
-            $html=view('choice.events.record-pdf',['event'=>$choiceEvent,'rows'=>$rows])->render();
+            $html=view('choice.events.record-pdf',['event'=>$choiceEvent,'rows'=>$rows,'summary'=>$summary])->render();
             return response($pdf->render($html,$stamp,"Administrator's Signature"),200,['Content-Type'=>'application/pdf','Content-Disposition'=>'attachment; filename="'.$filename.'"','Cache-Control'=>'private, no-store']);
         }
         $path=$this->temporary('.xlsx');
-        try { $workbook->saveEvent($path,['order','code','title','post_count','post_code','post_title','organization','ministry'],$rows,['Commission'=>'Bangladesh Public Service Commission (BPSC)','Report'=>'Choice Event Administrative Record','Event title'=>$choiceEvent->title,'Post code'=>$choiceEvent->post_code,'Unit'=>$choiceEvent->unit,'Status'=>$choiceEvent->status,'Start'=>$choiceEvent->start_at->format('Y-m-d H:i:s'),'End'=>$choiceEvent->end_at->format('Y-m-d H:i:s'),'Instructions'=>$choiceEvent->instructions,'Generated'=>$stamp]); }
+        try { $workbook->saveEvent($path,['order','code','title','post_count','post_code','post_title','organization','ministry'],$rows,['Commission'=>'Bangladesh Public Service Commission (BPSC)','Report'=>'Choice Event Administrative Record','Event title'=>$choiceEvent->title,'Post code'=>$choiceEvent->post_code,'Unit'=>$choiceEvent->unit,'Status'=>$choiceEvent->status,'Total candidates'=>$summary['total_candidates'],'Submitted candidates'=>$summary['submitted_candidates'],'Start'=>$choiceEvent->start_at->format('Y-m-d H:i:s'),'End'=>$choiceEvent->end_at->format('Y-m-d H:i:s'),'Instructions'=>$choiceEvent->instructions,'Generated'=>$stamp]); }
         catch (\Throwable $e) { @unlink($path); throw $e; }
         return response()->download($path,$filename,['Cache-Control'=>'private, no-store'])->deleteFileAfterSend(true);
     }
