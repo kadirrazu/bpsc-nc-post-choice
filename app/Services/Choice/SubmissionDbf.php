@@ -8,7 +8,7 @@ class SubmissionDbf {
         if ($encoded===false) throw ValidationException::withMessages(['export'=>'Use XLSX for Unicode text that Windows-1252 DBF cannot represent ('.$field.').']);
         return $encoded;
     }
-    public function save(string $path,array $rows): void {
+    public function save(string $path,array $rows,bool $includePostCode=false,array $extraColumns=[]): void {
         $widths=['SUBCHOICES'=>50,'UNSELECTED'=>50]; $records=[];
         foreach ($rows as $row) {
             $record=[];
@@ -19,6 +19,8 @@ class SubmissionDbf {
             $date=$row['b_date']??'';
             $record['B_DATE']=$date ? Carbon::parse($date)->format('d-m-Y') : '';
             $record['SUBMITTED']=!empty($row['submission_status']) ? 'TRUE':'FALSE';
+            if ($includePostCode) $record['POSTCODE']=$this->encoded((string)($row['applied_post_code']??''),'POSTCODE');
+            foreach ($extraColumns as $field=>$key) $record[$field]=$this->encoded((string)($row[$key]??''),$field);
             $records[]=$record;
         }
         // Both choice columns keep a useful minimum, expanding only as needed.
@@ -28,6 +30,8 @@ class SubmissionDbf {
         }
         $fields=[];
         foreach (['USER'=>10,'REG'=>10,'NAME'=>50,'FNAME'=>50,'MNAME'=>50,'B_DATE'=>10,'SUBCHOICES'=>$widths['SUBCHOICES'],'UNSELECTED'=>$widths['UNSELECTED'],'SUBMITTED'=>5] as $field=>$width) $fields[]=['name'=>$field,'type'=>'C','length'=>$width];
+        if ($includePostCode) $fields[]=['name'=>'POSTCODE','type'=>'C','length'=>20];
+        foreach ($extraColumns as $field=>$key) $fields[]=['name'=>$field,'type'=>'C','length'=>in_array($key,['ssc_roll','ssc_year','hsc_roll','hsc_year','nid'],true) ? 30 : 10];
         foreach ($records as $record) foreach ($fields as $field) {
             if (strlen($record[$field['name']])>$field['length']) throw ValidationException::withMessages(['export'=>$field['name'].' exceeds its '.$field['length'].'-character DBF field. Use XLSX to retain the complete value.']);
         }

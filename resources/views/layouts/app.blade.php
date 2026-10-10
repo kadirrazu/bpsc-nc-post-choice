@@ -112,7 +112,7 @@
                     <div class="d-flex flex-column flex-md-row flex-fill align-items-stretch align-items-md-center">
                         @php
                             $menuEvent=request()->route('choiceEvent');
-                            $choiceSection=request()->routeIs('choice-events.*','choice-submissions.*','choice-import.*','choice-editor.*','choice-options.*','choice-posts.*','choice-exports.*','choice-data.*');
+                            $choiceSection=request()->routeIs('choice-events.*','choice-submissions.*','choice-import.*','choice-editor.*','choice-options.*','choice-posts.*','choice-exports.*','choice-data.*','choice-multiple.*');
                             $archiveSection=request()->routeIs('choice-events.index') ? request()->boolean('archive') : ($menuEvent instanceof \App\Models\ChoiceEvent && in_array($menuEvent->lifecycle,['ARCHIVED','CANCELLED'],true));
                         @endphp
                         <ul class="navbar-nav">

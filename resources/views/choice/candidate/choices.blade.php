@@ -3,7 +3,9 @@
 <section class="card mb-4" aria-labelledby="candidate-information"><div class="card-body"><h2 id="candidate-information" class="h3 mb-3">Candidate Information</h2><dl class="candidate-info mb-0">
 @foreach(['User ID'=>$application?->user,'Registration'=>$application?->reg,'Name'=>$person->name,"Father's Name"=>$person->fname,"Mother's Name"=>$person->mname,'Birth Date'=>$person->b_date->format('d-m-Y'),'District'=>$application?->dist_name] as $label=>$value)
 <div><dt>{{ $label }}</dt><dd>{{ $value ?: '—' }}</dd></div>@endforeach
-</dl></div></section>
+</dl>
+@if($event->multiple_posts)<div class="mt-3 border-top pt-3"><h3 class="h4 mb-2">Your Applied Posts</h3><p class="small text-secondary">Available choices combine all linked applications below. One final submission covers this event.</p><ul class="mb-0">@foreach($person->applications()->with('post')->orderBy('id')->get() as $linked)<li>{{ $linked->post->post_code }} — {{ $linked->post->title }} <span class="text-secondary small">(User: {{ $linked->user }} · Reg: {{ $linked->reg }})</span></li>@endforeach</ul></div>@endif
+</div></section>
 <div class="public-intro-block"><h2 class="h2 mb-2">Arrange your preferred choices</h2><p class="text-secondary mb-4">Click or drag choices between panels. Arrange selected choices in your preferred order, then review before submitting.</p></div>
 @if($options->isEmpty())<div class="alert alert-info">No applicable choices are configured. Please contact the administrator.</div>@else
 @php($choiceData=$options->map(fn($option)=>['id'=>(string)$option->id,'code'=>$option->code,'title'=>$option->title,'posts'=>$option->post_count])->values())

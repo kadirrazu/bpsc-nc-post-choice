@@ -31,6 +31,7 @@ class CandidateImportController extends Controller {
         $summary=['total'=>$total,'submitted'=>$submitted,'not_submitted'=>$total-$submitted,'imports'=>(clone $imports)->count(),'last_import'=>(clone $imports)->max('created_at')];
         $districts=(clone $base)->whereNotNull('dist_name')->where('dist_name','!=','')->distinct()->orderBy('dist_name')->pluck('dist_name');
         $query=(clone $base)->with('candidate')->select('candidate_applications.*')->selectSub(DB::table('choice_submissions')->selectRaw('COUNT(*)')->whereColumn('choice_submissions.event_candidate_id','candidate_applications.event_candidate_id')->where('status','SUBMITTED'),'submitted_count');
+        if ($choiceEvent->multiple_posts) $query->with('candidate.applications.post');
         if ($search!=='') $query->where(function ($q) use ($search) {
             $q->where('user','like','%'.$search.'%')->orWhere('reg','like','%'.$search.'%')->orWhereHas('candidate',fn($q)=>$q->where('name','like','%'.$search.'%')->orWhere('fname','like','%'.$search.'%')->orWhere('mname','like','%'.$search.'%'));
         });
@@ -49,6 +50,7 @@ class CandidateImportController extends Controller {
         DB::transaction(function () use ($r,$choiceEvent,$post) {
             $event=ChoiceEvent::whereKey($choiceEvent->id)->lockForUpdate()->firstOrFail();
             if ($event->status!=='DRAFT' || $event->end_at->lt(now())) throw ValidationException::withMessages(['dataset'=>'Dataset reset requires a current Draft event.']);
+            if ($event->multiple_posts && DB::table('choice_submissions')->whereIn('event_candidate_id',$event->candidates()->select('id'))->exists()) throw ValidationException::withMessages(['dataset'=>'Clear all event submissions before resetting a multiple-post dataset.']);
             $count=$post->applications()->count();
             $exclusiveIds=$event->candidates()->whereHas('applications',fn($q)=>$q->where('event_post_id',$post->id))->whereDoesntHave('applications',fn($q)=>$q->where('event_post_id','!=',$post->id))->pluck('id')->all();
             $submissions=DB::table('choice_submissions')->whereIntegerInRaw('event_candidate_id',$exclusiveIds);

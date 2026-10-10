@@ -54,7 +54,7 @@ class ChoiceWorkbook {
         } finally { $book->disconnectWorksheets(); }
     }
 
-    public function saveEvent(string $path,array $columns,array $rows,array $metadata): void {
+    public function saveEvent(string $path,array $columns,array $rows,array $metadata,array $postSummary=[]): void {
         $book=new Spreadsheet; $eventSheet=$book->getActiveSheet(); $eventSheet->setTitle('Event');
         $row=1;
         foreach ($metadata as $label=>$value) {
@@ -63,6 +63,19 @@ class ChoiceWorkbook {
         }
         $eventSheet->getColumnDimension('A')->setWidth(24); $eventSheet->getColumnDimension('B')->setWidth(85);
         $eventSheet->getStyle('A1:A'.($row-1))->getFont()->setBold(true);
+        if ($postSummary) {
+            $row++; $eventSheet->setCellValueExplicit([1,$row],'Applied Post Submission Statistics',DataType::TYPE_STRING);
+            $eventSheet->getStyle('A'.$row)->getFont()->setBold(true); $row++;
+            foreach (['Post code','Applied post','Candidates','Submitted','Not submitted'] as $i=>$label) $eventSheet->setCellValueExplicit([$i+1,$row],$label,DataType::TYPE_STRING);
+            $eventSheet->getStyle('A'.$row.':E'.$row)->getFont()->setBold(true); $row++;
+            foreach ($postSummary as $stat) {
+                foreach (['post_code','post_title','total_candidates','submitted_candidates','not_submitted'] as $i=>$key) $eventSheet->setCellValueExplicit([$i+1,$row],$stat[$key],$i>=2 ? DataType::TYPE_NUMERIC : DataType::TYPE_STRING);
+                $row++;
+            }
+            foreach (['C','D','E'] as $col) $eventSheet->getColumnDimension($col)->setWidth(18);
+            $eventSheet->setCellValueExplicit([1,$row],'Counts are per applied post; Unique submissions count each candidate once. Cancelled submissions are excluded.',DataType::TYPE_STRING);
+            $eventSheet->mergeCells('A'.$row.':E'.$row); $eventSheet->getRowDimension($row)->setRowHeight(30);
+        }
         $eventSheet->freezePane('B1');
         $choiceSheet=$book->createSheet(); $choiceSheet->setTitle('Choices');
         foreach ($columns as $i=>$name) $choiceSheet->setCellValueExplicit([$i+1,1],$name,DataType::TYPE_STRING);

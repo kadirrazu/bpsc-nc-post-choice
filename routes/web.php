@@ -1,6 +1,6 @@
 <?php
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\{UserController,ChoiceEventController,CandidateImportController,ChoiceEditorController,CandidateSubmissionController,ChoiceSubmissionAdminController,ChoiceExportController,ChoiceDataResetController,StaffProfileController,SubmissionStatusController};
+use App\Http\Controllers\{UserController,ChoiceEventController,CandidateImportController,MultiplePostImportController,ChoiceEditorController,CandidateSubmissionController,ChoiceSubmissionAdminController,ChoiceExportController,ChoiceDataResetController,StaffProfileController,SubmissionStatusController};
 use App\Http\Middleware\ChoiceStaff;
 use App\Models\ChoiceEvent;
 Route::get('/', fn()=>view('choice.public.home',['events'=>ChoiceEvent::available()->orderBy('end_at')->get()]))->name('home');
@@ -34,6 +34,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/choice-events/{choiceEvent}/submissions/{submission}/cancel',[ChoiceSubmissionAdminController::class,'cancel'])->name('choice-submissions.cancel');
         Route::get('/choice-events/{choiceEvent}/record/{format}',[ChoiceExportController::class,'record'])->name('choice-exports.record');
         Route::get('/choice-events/{choiceEvent}/candidate-export/{format}',[ChoiceExportController::class,'candidates'])->name('choice-exports.candidates');
+        Route::get('/choice-events/{choiceEvent}/posts/{post}/matched-export/{format}',[ChoiceExportController::class,'matched'])->name('choice-exports.matched');
 
         Route::get('/choice-events', [ChoiceEventController::class,'index'])->name('choice-events.index');
         Route::get('/choice-events/create', [ChoiceEventController::class,'create'])->name('choice-events.create');
@@ -51,6 +52,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/choice-events/{choiceEvent}/posts/{post}/choice-sample', [ChoiceEditorController::class,'sample'])->name('choice-editor.sample');
         Route::post('/choice-events/{choiceEvent}/posts/{post}/choice-import/preview', [ChoiceEditorController::class,'preview'])->name('choice-editor.preview');
         Route::post('/choice-events/{choiceEvent}/posts/{post}/choice-import/confirm', [ChoiceEditorController::class,'confirm'])->name('choice-editor.confirm');
+        Route::post('/choice-events/{choiceEvent}/posts/{post}/multiple-import/preview',[MultiplePostImportController::class,'preview'])->name('choice-multiple.preview');
+        Route::get('/choice-events/{choiceEvent}/posts/{post}/multiple-import/review',[MultiplePostImportController::class,'review'])->name('choice-multiple.review');
+        Route::put('/choice-events/{choiceEvent}/posts/{post}/multiple-import/review',[MultiplePostImportController::class,'decisions'])->name('choice-multiple.decisions');
+        Route::post('/choice-events/{choiceEvent}/posts/{post}/multiple-import/confirm',[MultiplePostImportController::class,'confirm'])->name('choice-multiple.confirm');
+        Route::get('/choice-events/{choiceEvent}/posts/{post}/multiple-import/sample',[MultiplePostImportController::class,'sample'])->name('choice-multiple.sample');
         Route::get('/candidate-import-template', [CandidateImportController::class,'template'])->name('choice-import.template');
         Route::get('/choice-events/{choiceEvent}/posts/{post}/candidates', [CandidateImportController::class,'index'])->name('choice-import.index');
         Route::delete('/choice-events/{choiceEvent}/posts/{post}/candidates', [CandidateImportController::class,'reset'])->name('choice-import.reset');

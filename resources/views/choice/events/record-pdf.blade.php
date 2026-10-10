@@ -3,7 +3,7 @@
 @php
     // Reserve extra header height for longer event titles on every page.
     $eventTitleLines=max(1,(int)ceil(mb_strwidth($event->title,'UTF-8')/65));
-    $headerReserve=84+($eventTitleLines-1)*15;
+    $headerReserve=84+($eventTitleLines-1)*15+($event->multiple_posts ? 8 : 0);
 @endphp
 <style>
 /* Half-inch outer print boundary; bottom content reserve protects signature/footer. */
@@ -37,7 +37,15 @@ tr { page-break-inside:avoid; }
 <tr><th>Submitted Candidates</th><td>{{ number_format($summary['submitted_candidates']) }}</td></tr>
 <tr><th>Schedule</th><td>{{ $event->start_at->format('d M Y H:i') }} — {{ $event->end_at->format('d M Y H:i') }} (Bangladesh time)</td></tr>
 @if($event->instructions)<tr><th>Instructions</th><td>{{ $event->instructions }}</td></tr>@endif
-</tbody></table><h2>Choice Code Reference</h2>
+</tbody></table>
+@if($event->multiple_posts)
+<h2>Applied Post Submission Statistics</h2>
+<p style="font-size:10.5pt">Unique Submissions: <strong>{{ number_format($summary['submitted_candidates']) }}</strong> · Total Applications: <strong>{{ number_format(array_sum(array_column($postSummary,'total_candidates'))) }}</strong></p>
+<table class="receipt-choices"><thead><tr><th style="width:13%">Post Code</th><th style="width:39%">Applied Post</th><th style="width:16%;text-align:center">Candidates</th><th style="width:16%;text-align:center">Submitted</th><th style="width:16%;text-align:center">Not Submitted</th></tr></thead><tbody>
+@foreach($postSummary as $stat)<tr><td>{{ $stat['post_code'] }}</td><td>{{ $stat['post_title'] }}</td><td style="text-align:center">{{ number_format($stat['total_candidates']) }}</td><td style="text-align:center">{{ number_format($stat['submitted_candidates']) }}</td><td style="text-align:center">{{ number_format($stat['not_submitted']) }}</td></tr>@endforeach
+</tbody></table><p style="font-size:9.5pt">A candidate can count under several posts; unique submissions count each person once. Cancelled submissions are excluded.</p>
+@endif
+<h2>Choice Code Reference</h2>
 <table class="receipt-choices"><thead><tr><th style="width:10%;text-align:center">Order</th><th style="width:14%;text-align:center">Code</th><th>Choice Title / Eligibility Post</th><th style="width:14%;text-align:center">Posts</th></tr></thead><tbody>
 @forelse($rows as $row)<tr><td style="text-align:center">{{ $row['order'] }}</td><td style="text-align:center">{{ $row['code'] }}</td><td><span data-choice-title class="{{ preg_match('/[\x{0980}-\x{09FF}]/u',$row['title']) ? 'choice-title-bn' : '' }}">{{ $row['title'] }}</span><br><small>Post: {{ $row['post_code'] }} — {{ $row['post_title'] }}@if($row['organization']) · {{ $row['organization'] }}@endif @if($row['ministry']) · {{ $row['ministry'] }}@endif</small></td><td style="text-align:center">{{ $row['post_count'] ?? '—' }}</td></tr>@empty<tr><td colspan="4">No choices configured.</td></tr>@endforelse
 </tbody></table>

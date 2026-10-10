@@ -22,9 +22,9 @@ class ChoiceEventController extends Controller {
         });
         return redirect()->route('choice-events.show',$event)->with('success','Event created. Add choices and import candidates.');
     }
-    public function show(ChoiceEvent $choiceEvent) {
+    public function show(ChoiceEvent $choiceEvent, \App\Services\Choice\ChoiceExportData $data) {
         $choiceEvent->load(['posts'=>fn($q)=>$q->withCount('applications')->with('choices')]);
-        return view('choice.events.show',['event'=>$choiceEvent]);
+        return view('choice.events.show',['event'=>$choiceEvent,'summary'=>$choiceEvent->multiple_posts ? $data->summary($choiceEvent) : null,'postSummary'=>$choiceEvent->multiple_posts ? $data->postSummary($choiceEvent) : []]);
     }
     public function confirmClose(Request $r, ChoiceEvent $choiceEvent) {
         abort_unless($r->user()->role===UserRole::Admin,403);

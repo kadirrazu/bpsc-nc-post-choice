@@ -10,11 +10,29 @@ class ChoiceSubmissionAdminController extends Controller {
     public function index(Request $r,ChoiceEvent $choiceEvent) {
         $data=$r->validate(['q'=>'nullable|string|max:100','per_page'=>['nullable',Rule::in([25,50,100])]]);
         $q=DB::table('candidate_applications as a')->join('event_candidates as c','c.id','=','a.event_candidate_id')->join('event_posts as p','p.id','=','a.event_post_id')->join('choice_submissions as s',fn($j)=>$j->on('s.event_candidate_id','=','c.id')->where('s.status','SUBMITTED'))->where('c.choice_event_id',$choiceEvent->id)->where('p.choice_event_id',$choiceEvent->id);
+        if ($choiceEvent->multiple_posts) {
+            $r->validate(['post_id'=>'nullable|integer|min:1']);
+            if ($r->filled('post_id')) $choiceEvent->posts()->findOrFail($r->integer('post_id'));
+            // One row per person's submission, with all applied posts shown beneath it.
+            $q=DB::table('event_candidates as c')->join('choice_submissions as s',fn($j)=>$j->on('s.event_candidate_id','=','c.id')->where('s.status','SUBMITTED'))->where('c.choice_event_id',$choiceEvent->id);
+            if ($r->filled('post_id')) $q->whereExists(fn($a)=>$a->selectRaw('1')->from('candidate_applications as a')->whereColumn('a.event_candidate_id','c.id')->where('a.event_post_id',$r->integer('post_id')));
+            if ($search=$data['q']??null) $q->where(fn($q)=>$q->where('c.name','like','%'.$search.'%')->orWhereExists(fn($a)=>$a->selectRaw('1')->from('candidate_applications as a')->whereColumn('a.event_candidate_id','c.id')->where(fn($a)=>$a->where('a.user','like','%'.$search.'%')->orWhere('a.reg','like','%'.$search.'%'))));
+            $rows=$q->orderBy('c.id')->select('c.id','c.name','s.id as submission_id','s.submitted_choices','s.submitted_at','s.token','s.candidate_snapshot')->paginate((int)($data['per_page']??25))->withQueryString();
+            $applications=\App\Models\CandidateApplication::with('post')->whereIn('event_candidate_id',$rows->pluck('id'))->orderBy('id')->get()->groupBy('event_candidate_id');
+            foreach ($rows as $row) {
+                $row->applications=$applications->get($row->id,collect());
+                $snapshot=$row->candidate_snapshot ? json_decode($row->candidate_snapshot,true) : [];
+                $first=$row->applications->first(); $row->user=$snapshot['user']??$first?->user; $row->reg=$snapshot['reg']??$first?->reg;
+                $row->post_code=$row->applications->map(fn($app)=>$app->post->post_code)->implode(', ');
+            }
+        } else {
         if ($search=$data['q']??null) $q->where(fn($q)=>$q->where('a.user','like','%'.$search.'%')->orWhere('a.reg','like','%'.$search.'%')->orWhere('c.name','like','%'.$search.'%'));
         $rows=$q->orderBy('c.id')->orderBy('a.id')->select('c.id','c.name','a.user','a.reg','p.post_code','s.id as submission_id','s.submitted_choices','s.submitted_at','s.token')->paginate((int)($data['per_page']??25))->withQueryString();
+        }
         $counts=['candidates'=>$choiceEvent->candidates()->count(),'submitted'=>DB::table('choice_submissions')->whereIn('event_candidate_id',$choiceEvent->candidates()->select('id'))->where('status','SUBMITTED')->count(),'cancelled'=>DB::table('choice_submissions')->whereIn('event_candidate_id',$choiceEvent->candidates()->select('id'))->where('status','CANCELLED')->count()];
         $history=DB::table('choice_submissions as s')->join('event_candidates as c','c.id','=','s.event_candidate_id')->leftJoin('users as u','u.id','=','s.cancelled_by')->where('c.choice_event_id',$choiceEvent->id)->where('s.status','CANCELLED')->orderByDesc('s.cancelled_at')->limit(20)->get(['s.id','s.token','c.name','s.cancelled_at','s.cancellation_reason','u.name as administrator']);
-        return view('choice.submissions.index',['event'=>$choiceEvent,'rows'=>$rows,'counts'=>$counts,'history'=>$history]);
+        $exportData=new \App\Services\Choice\ChoiceExportData;
+        return view('choice.submissions.index',['event'=>$choiceEvent,'rows'=>$rows,'counts'=>$counts,'history'=>$history,'summary'=>$choiceEvent->multiple_posts ? $exportData->summary($choiceEvent) : null,'postSummary'=>$choiceEvent->multiple_posts ? $exportData->postSummary($choiceEvent) : []]);
     }
     public function receipt(Request $r,ChoiceEvent $choiceEvent,int $submission,SubmissionReceiptData $dataBuilder,SubmissionReceiptPdf $pdf,ReceiptQrCode $qr) {
         $record=DB::table('choice_submissions')->where('id',$submission)->where('status','SUBMITTED')->whereIn('event_candidate_id',$choiceEvent->candidates()->select('id'))->first();

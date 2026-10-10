@@ -39,7 +39,14 @@ class CandidateSubmissionController extends Controller {
         $data=$r->validate(['user'=>'required|string|max:10','birth_date'=>['required','string','regex:/^\d{8}$/D']]);
         try { $date=(new BirthDateNormalizer)->normalize($data['birth_date']); }
         catch (\InvalidArgumentException $e) { throw ValidationException::withMessages(['credentials'=>'User ID and birth date did not match.']); }
-        $matches=CandidateApplication::with('candidate')->whereHas('candidate',fn($q)=>$q->where('choice_event_id',$choiceEvent->id)->whereDate('b_date',$date))->whereHas('post',fn($q)=>$q->where('choice_event_id',$choiceEvent->id))->where('user',$data['user'])->get()->filter(fn($app)=>hash_equals((string)$app->user,$data['user']));
+        if ($choiceEvent->multiple_posts) {
+            $matches=CandidateApplication::with('candidate')->whereHas('candidate',fn($q)=>$q->where('choice_event_id',$choiceEvent->id))->whereHas('post',fn($q)=>$q->where('choice_event_id',$choiceEvent->id))->where('user',$data['user'])->get()->filter(function ($app) use ($data,$date) {
+                $source=$app->source_identity ? json_decode($app->source_identity,true) : [];
+                return hash_equals((string)$app->user,$data['user']) && ($app->candidate->b_date->format('Y-m-d')===$date || ($source['b_date']??null)===$date);
+            });
+        } else {
+            $matches=CandidateApplication::with('candidate')->whereHas('candidate',fn($q)=>$q->where('choice_event_id',$choiceEvent->id)->whereDate('b_date',$date))->whereHas('post',fn($q)=>$q->where('choice_event_id',$choiceEvent->id))->where('user',$data['user'])->get()->filter(fn($app)=>hash_equals((string)$app->user,$data['user']));
+        }
         $ids=$matches->pluck('event_candidate_id')->unique();
         if ($ids->count()!==1) throw ValidationException::withMessages(['credentials'=>'User ID and birth date did not match.']);
         $r->session()->regenerate();
