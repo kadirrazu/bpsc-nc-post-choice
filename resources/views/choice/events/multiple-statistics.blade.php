@@ -11,5 +11,15 @@
 @if($showExports ?? false)<td><div class="d-flex flex-wrap gap-2"><a class="btn btn-outline-primary btn-sm" href="{{ route('choice-exports.matched',[$event,$stat['post_id'],'xlsx']) }}">XLSX</a><a class="btn btn-outline-primary btn-sm" href="{{ route('choice-exports.matched',[$event,$stat['post_id'],'dbf']) }}">DBF</a></div></td>@endif
 </tr>@empty<tr><td colspan="{{ ($showExports ?? false) ? 6 : 5 }}" class="text-secondary">No applied posts yet.</td></tr>@endforelse
 </tbody></table></div>
+@if($showExports ?? false)
+<h3 class="h4 mt-4 mb-2">Combined Exports</h3>
+<div class="table-responsive mb-3"><table class="table table-vcenter mb-0"><thead><tr>
+<th class="fw-bold" style="width:24%">Export List</th><th class="fw-bold">Includes</th><th class="fw-bold" style="width:20%">Downloads</th>
+</tr></thead><tbody>
+<tr><td><strong>Combined All</strong><div class="small text-secondary mt-1">Full Combined List</div></td><td class="small text-secondary">All confirmed applications, ordered by post code ASC, then registration ASC. One row per application.</td><td><div class="d-flex flex-wrap gap-2"><a class="btn btn-outline-primary btn-sm" aria-label="Download Combined All XLSX" href="{{ route('choice-exports.combined',[$event,'xlsx']) }}">XLSX</a><a class="btn btn-outline-primary btn-sm" aria-label="Download Combined All DBF" href="{{ route('choice-exports.combined',[$event,'dbf']) }}">DBF</a></div></td></tr>
+<tr><td><strong>Combined Unique</strong><div class="small text-secondary mt-1">Combined Unique Candidate List</div></td><td class="small text-secondary">One row per candidate. Start with the earliest post code and append only new candidates from later posts; registration ASC within each post. TRUE rows match Unique Submissions.</td><td><div class="d-flex flex-wrap gap-2"><a class="btn btn-outline-primary btn-sm" aria-label="Download Combined Unique XLSX" href="{{ route('choice-exports.combined-unique',[$event,'xlsx']) }}">XLSX</a><a class="btn btn-outline-primary btn-sm" aria-label="Download Combined Unique DBF" href="{{ route('choice-exports.combined-unique',[$event,'dbf']) }}">DBF</a></div></td></tr>
+</tbody></table></div>
+<p class="small text-secondary mb-3">Both combined lists retain matched user/reg columns for all applied posts.</p>
+@endif
 <p class="text-secondary small mb-0">Event-wide counts; search filters do not change these statistics. A candidate may appear in several post totals but is counted once in Unique Submissions. Cancelled submissions are excluded.</p>
 @if($showExports ?? false)<p class="text-secondary small mt-2 mb-0">Exports include all confirmed imported candidates for the selected post, with matched registration and user columns for other posts. Unmatched values are blank. XLSX uses reg_POSTCODE / user_POSTCODE; DBF uses REG_POSTCODE / USR_POSTCODE (10-character values). Long or nonstandard post codes use R_P{post ID} / U_P{post ID} in DBF.</p>@endif

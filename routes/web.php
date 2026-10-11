@@ -35,6 +35,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/choice-events/{choiceEvent}/record/{format}',[ChoiceExportController::class,'record'])->name('choice-exports.record');
         Route::get('/choice-events/{choiceEvent}/candidate-export/{format}',[ChoiceExportController::class,'candidates'])->name('choice-exports.candidates');
         Route::get('/choice-events/{choiceEvent}/posts/{post}/matched-export/{format}',[ChoiceExportController::class,'matched'])->name('choice-exports.matched');
+        Route::get('/choice-events/{choiceEvent}/combined-matched-export/{format}',[ChoiceExportController::class,'combined'])->name('choice-exports.combined');
+        Route::get('/choice-events/{choiceEvent}/combined-unique-export/{format}',[ChoiceExportController::class,'combinedUnique'])->name('choice-exports.combined-unique');
 
         Route::get('/choice-events', [ChoiceEventController::class,'index'])->name('choice-events.index');
         Route::get('/choice-events/create', [ChoiceEventController::class,'create'])->name('choice-events.create');

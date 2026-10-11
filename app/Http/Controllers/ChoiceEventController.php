@@ -9,7 +9,7 @@ use Illuminate\Validation\ValidationException;
 class ChoiceEventController extends Controller {
     public function index(Request $r) {
         $archive = $r->boolean('archive');
-        $events = ChoiceEvent::query()->withCount(['posts','candidates'])->when($archive, fn($q)=>$q->where(fn($q)=>$q->where('end_at','<',now())->orWhereIn('status',['ARCHIVED','CANCELLED'])),fn($q)=>$q->where('end_at','>=',now())->whereNotIn('status',['ARCHIVED','CANCELLED']))->latest()->paginate(15)->withQueryString();
+        $events = ChoiceEvent::query()->withCount(['posts','candidates','candidates as submitted_count'=>fn($q)=>$q->whereExists(fn($s)=>$s->selectRaw('1')->from('choice_submissions')->whereColumn('choice_submissions.event_candidate_id','event_candidates.id')->where('status','SUBMITTED'))])->when($archive, fn($q)=>$q->where(fn($q)=>$q->where('end_at','<',now())->orWhereIn('status',['ARCHIVED','CANCELLED'])),fn($q)=>$q->where('end_at','>=',now())->whereNotIn('status',['ARCHIVED','CANCELLED']))->latest()->paginate(15)->withQueryString();
         return view('choice.events.index', compact('events','archive'));
     }
     public function create() { return view('choice.events.form', ['event'=>new ChoiceEvent]); }

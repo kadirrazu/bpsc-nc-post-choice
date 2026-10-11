@@ -81,3 +81,27 @@ Original identity fields are preserved per application. Other-post registration/
 Unique candidates count event candidates once. Unique submissions count only current SUBMITTED records once per person. Per-post counts reflect all that person's applied posts, regardless of which post was used to sign in; they are not added together as unique people. Not submitted = confirmed applications minus actively submitted applications. Cancelled history does not count as an active submission. Statistics are event-wide and independent of list search/filter settings.
 
 The same summary appears on the event and Candidate Submissions pages. Operators may view submission statistics but cannot download administrative matched exports. Event Record XLSX remains two sheets: Event (metadata, unique counts, per-post statistics) and Choices. The Event Record PDF includes the same statistics and keeps its repeating header, table headers, timestamp/page footer and credit line. Single-post exports and submission behavior remain unchanged.
+
+## Combined list export
+
+Combined List XLSX/DBF downloads appear beside the individual per-post exports on the event page. Each confirmed application produces one row; the same person can appear under several applied posts. Rows sort by applied post code ASC, registration ASC, then application ID to resolve ties. Post codes and registrations remain strings and retain leading zeros. This combines the individual datasets without deduplicating applications.
+
+The combined schema contains the base identity, submission fields, applied_post_code, and reg_POSTCODE/user_POSTCODE columns for every post. DBF uses the same REG_/USR_ aliases (or R_P{ID}/U_P{ID} for long/nonstandard codes) and exports one plain DBF. Original identities and only confirmed matching links are used; unmatched values are blank. The filename contains the event post code and Bangladesh-time timestamp. Administrator access is required. Individual exports and the single-post workflow are unchanged.
+
+The current and archive event lists show title and post code in one column. Submitted counts unique event candidates with a current SUBMITTED record; multiple applications and cancelled history do not inflate the count. Counts are calculated in the list query without a per-event database query.
+
+## Combined unique candidate export
+
+Both Full Combined List and Combined Unique Candidate List are available as XLSX or plain DBF downloads. Full keeps every confirmed application. Unique keeps each confirmed event_candidate_id once, not each USER, REG or name.
+
+For Unique, sort applications by post code ASC, registration ASC, then application ID. Keep the first occurrence of each candidate and skip that candidate in later posts. Candidates found only in later posts are appended in that post's registration order. The retained application's original identity, user, registration and applied post code become the base row; user/reg columns for all linked posts remain available. Unmatched candidates are not merged.
+
+Unique export row count matches unique imported candidates (assuming every candidate has a confirmed application); the number of TRUE rows matches unique active submissions. Cancelled-only candidates have FALSE status and blank choices. Full/per-post exports, matching rules, single-post workflow and administrative permissions remain unchanged. Unique filenames begin combined-unique-candidates and include event post code plus Bangladesh-time timestamp.
+
+## Export layout
+
+On the event page, keep the post-wise statistics and individual export table first. Place a separate Combined Exports table below it, with Combined All and Combined Unique rows, short descriptions and XLSX/DBF actions. This layout change does not alter export data, ordering or permissions.
+
+## Add Post form placement
+
+The event page places Add Post below the existing post cards. The form is collapsed by default and toggles through the Add Post control using native details/summary, with no JavaScript dependency. A failed Add Post validation keeps the form open and restores entered values. Existing Draft-only configuration permissions remain unchanged.

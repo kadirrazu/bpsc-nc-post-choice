@@ -46,8 +46,19 @@ class ChoiceExportController extends Controller {
     }
     public function matched(ChoiceEvent $choiceEvent,\App\Models\EventPost $post,string $format,ChoiceExportData $data,\App\Services\Choice\MultiplePostExport $export,ChoiceWorkbook $workbook,SubmissionDbf $dbf) {
         abort_unless($choiceEvent->multiple_posts && $post->choice_event_id===$choiceEvent->id && in_array($format,['xlsx','dbf'],true),404);
-        $dataset=$export->dataset($choiceEvent,$post,$data);
-        $path=$this->temporary('.'.$format); $filename=ExportFilename::make('matched-candidates',$post->post_code,$format);
+        return $this->matchedDownload($choiceEvent,$post,$format,$data,$export,$workbook,$dbf);
+    }
+    public function combined(ChoiceEvent $choiceEvent,string $format,ChoiceExportData $data,\App\Services\Choice\MultiplePostExport $export,ChoiceWorkbook $workbook,SubmissionDbf $dbf) {
+        abort_unless($choiceEvent->multiple_posts && in_array($format,['xlsx','dbf'],true),404);
+        return $this->matchedDownload($choiceEvent,null,$format,$data,$export,$workbook,$dbf);
+    }
+    public function combinedUnique(ChoiceEvent $choiceEvent,string $format,ChoiceExportData $data,\App\Services\Choice\MultiplePostExport $export,ChoiceWorkbook $workbook,SubmissionDbf $dbf) {
+        abort_unless($choiceEvent->multiple_posts && in_array($format,['xlsx','dbf'],true),404);
+        return $this->matchedDownload($choiceEvent,null,$format,$data,$export,$workbook,$dbf,true);
+    }
+    private function matchedDownload(ChoiceEvent $choiceEvent,?\App\Models\EventPost $post,string $format,ChoiceExportData $data,\App\Services\Choice\MultiplePostExport $export,ChoiceWorkbook $workbook,SubmissionDbf $dbf,bool $unique=false) {
+        $dataset=$export->dataset($choiceEvent,$post,$data,$unique);
+        $path=$this->temporary('.'.$format); $filename=ExportFilename::make($post ? 'matched-candidates' : ($unique ? 'combined-unique-candidates' : 'combined-matched-candidates'),$post?->post_code??$choiceEvent->post_code,$format);
         try {
             if ($format==='xlsx') $workbook->save($path,$dataset['columns'],$dataset['rows']);
             else $dbf->save($path,$dataset['rows'],true,$dataset['mapping']);

@@ -267,6 +267,83 @@ class MultiplePostWorkflowTest extends TestCase {
         $this->assertSame('reg_LONG-POST-CODE',$dataset['mapping']['R_P'.$two->id]);$this->assertSame('user_LONG-POST-CODE',$dataset['mapping']['U_P'.$two->id]);
         $response=$this->get(route('choice-exports.matched',[$event,$one,'dbf']))->assertOk();@unlink($response->baseResponse->getFile()->getPathname());
     }
+    public function test_combined_exports_sort_by_post_code_then_registration_with_all_matched_columns(): void {
+        [$admin,$event,$one,$two]=$this->fixture();
+        $two->update(['post_code'=>'260000']); // Created later, but must be exported first.
+        $extra=$this->row(['user'=>'EXTRA01','reg'=>'0000000001','name'=>'Different Person','fname'=>'','mname'=>'','b_date'=>'03032000','ssc_roll'=>'999999']);
+        $this->upload($event,$one,[$this->row(['reg'=>'0000000009']),$extra]);$this->confirm($event,$one);
+        $later=$this->row(['user'=>'EXTRA01','reg'=>'0000000001','name'=>'Unrelated Applicant','fname'=>'','mname'=>'','b_date'=>'04042000','ssc_roll'=>'888888']);
+        $this->upload($event,$two,[$this->row(['user'=>'USER02','reg'=>'0000000003']),$later]);$this->confirm($event,$two);
+        $dataset=(new \App\Services\Choice\MultiplePostExport)->dataset($event,null,new ChoiceExportData);
+        $this->assertSame(['260000','260000','260001','260001'],array_column($dataset['rows'],'applied_post_code'));
+        $this->assertSame(['0000000001','0000000003','0000000001','0000000009'],array_column($dataset['rows'],'reg'));
+        $this->assertSame(['Unrelated Applicant','Rahim Uddin','Different Person','Rahim Uddin'],array_column($dataset['rows'],'name'));
+        $this->assertSame('0000000009',$dataset['rows'][1]['reg_260001']);$this->assertSame('USER01',$dataset['rows'][1]['user_260001']);
+        $this->assertSame('0000000003',$dataset['rows'][3]['reg_260000']);$this->assertSame('USER02',$dataset['rows'][3]['user_260000']);
+        $this->assertSame('',$dataset['rows'][0]['reg_260001']);$this->assertSame('',$dataset['rows'][2]['reg_260000']);
+        foreach (['xlsx','dbf'] as $format) {
+            $response=$this->get(route('choice-exports.combined',[$event,$format]))->assertOk();$path=$response->baseResponse->getFile()->getPathname();
+            $this->assertMatchesRegularExpression('/combined-matched-candidates-260000-\d{8}_\d{6}\.'.$format.'/',$response->headers->get('Content-Disposition'));
+            try {
+                if ($format==='xlsx') {
+                    $book=\PhpOffice\PhpSpreadsheet\IOFactory::load($path);$sheet=$book->getActiveSheet();$values=$sheet->toArray(null,true,false);$headers=array_shift($values);$rows=array_map(fn($r)=>array_combine($headers,$r),$values);
+                    $this->assertCount(4,$rows);$this->assertSame(['0000000001','0000000003','0000000001','0000000009'],array_column($rows,'reg'));$this->assertSame('0000000009',$rows[1]['reg_260001']);$book->disconnectWorksheets();
+                } else {
+                    $bytes=file_get_contents($path);$header=unpack('v',substr($bytes,8,2))[1];$length=unpack('v',substr($bytes,10,2))[1];$this->assertSame(4,unpack('V',substr($bytes,4,4))[1]);$offset=1;$rows=array_fill(0,4,[]);
+                    for ($p=32;ord($bytes[$p])!==13;$p+=32) { $field=rtrim(substr($bytes,$p,11),"\0");$width=ord($bytes[$p+16]);for ($i=0;$i<4;$i++) $rows[$i][$field]=rtrim(substr($bytes,$header+$i*$length+$offset,$width));$offset+=$width; }
+                    $this->assertSame(['260000','260000','260001','260001'],array_column($rows,'POSTCODE'));$this->assertSame(['0000000001','0000000003','0000000001','0000000009'],array_column($rows,'REG'));$this->assertSame('0000000009',$rows[1]['REG_260001']);$this->assertSame('USER02',$rows[3]['USR_260000']);$this->assertSame('',$rows[0]['REG_260001']);$this->assertSame($header+4*$length+1,strlen($bytes));
+                }
+            } finally { @unlink($path); }
+        }
+        $this->get(route('choice-events.show',$event))->assertOk()->assertSee('Combined List')->assertSee(route('choice-exports.combined',[$event,'xlsx']),false);
+        $this->get(route('choice-exports.combined',[$event,'zip']))->assertNotFound();
+        $this->actingAs(User::factory()->create(['role'=>UserRole::Operator,'is_active'=>true]))->get(route('choice-exports.combined',[$event,'dbf']))->assertForbidden();
+    }
+    public function test_event_list_submitted_count_is_unique_and_includes_archive(): void {
+        [$admin,$event,$one,$two]=$this->fixture();$this->upload($event,$one,[$this->row()]);$this->confirm($event,$one);$this->upload($event,$two,[$this->row(['user'=>'USER02','reg'=>'0000000002'])]);$this->confirm($event,$two);
+        $person=$event->candidates()->first();
+        foreach ([['SUBMITTED',1],['CANCELLED',null]] as $i=>[$status,$slot]) DB::table('choice_submissions')->insert(['event_candidate_id'=>$person->id,'submitted_choices'=>'A01','token'=>str_pad((string)$i,32,'S'),'status'=>$status,'active_slot'=>$slot,'submitted_at'=>now(),'submitted_ip'=>'127.0.0.1','created_at'=>now(),'updated_at'=>now()]);
+        $response=$this->get(route('choice-events.index'))->assertOk()->assertSee('Event / Post Code')->assertSee('Submitted');$row=$response->viewData('events')->first();$this->assertSame(1,$row->submitted_count);$this->assertSame(1,$row->candidates_count);$this->assertSame(2,$row->posts_count);
+        $event->update(['status'=>'ARCHIVED']);$response=$this->get(route('choice-events.index',['archive'=>1]))->assertOk();$this->assertSame(1,$response->viewData('events')->first()->submitted_count);
+        $single=ChoiceEvent::create(['title'=>'Single','post_code'=>'260999','multiple_posts'=>false,'status'=>'DRAFT','start_at'=>now()->subHour(),'end_at'=>now()->addDay(),'created_by'=>$admin->id]);
+        $this->get(route('choice-exports.combined',[$single,'xlsx']))->assertNotFound();
+        $empty=$this->get(route('choice-events.index'))->assertOk();$this->assertSame(0,$empty->viewData('events')->first()->submitted_count);
+    }
+    public function test_unique_combined_exports_keep_first_post_identity_and_append_only_new_people(): void {
+        [$admin,$event,$one,$two]=$this->fixture();$two->update(['post_code'=>'260000']);
+        $empty=$this->get(route('choice-exports.combined-unique',[$event,'dbf']))->assertOk();$emptyPath=$empty->baseResponse->getFile()->getPathname();
+        try { $this->assertSame(0,unpack('V',substr(file_get_contents($emptyPath),4,4))[1]); } finally { @unlink($emptyPath); }
+        $extra=$this->row(['user'=>'EXTRA01','reg'=>'0000000001','name'=>'Different Person','fname'=>'','mname'=>'','b_date'=>'03032000','ssc_roll'=>'999999']);
+        $this->upload($event,$one,[$this->row(['reg'=>'0000000009']),$extra]);$this->confirm($event,$one);
+        $later=$this->row(['user'=>'EXTRA01','reg'=>'0000000001','name'=>'Unrelated Applicant','fname'=>'','mname'=>'','b_date'=>'04042000','ssc_roll'=>'888888']);
+        $this->upload($event,$two,[$this->row(['user'=>'USER02','reg'=>'0000000003','fname'=>'Earlier Post Father']),$later]);$this->confirm($event,$two);
+        $third=$event->posts()->create(['post_code'=>'260003','title'=>'Third Post']);
+        $new=$this->row(['user'=>'USER04','reg'=>'0000000002','name'=>'Later Only Applicant','fname'=>'','mname'=>'','b_date'=>'05052001','ssc_roll'=>'777777']);
+        $this->upload($event,$third,[$this->row(['user'=>'USER03','reg'=>'0000000008']),$new]);$this->confirm($event,$third);
+        foreach ([['Rahim Uddin','SUBMITTED',1],['Unrelated Applicant','CANCELLED',null]] as $i=>[$name,$status,$slot]) DB::table('choice_submissions')->insert(['event_candidate_id'=>$event->candidates()->where('name',$name)->first()->id,'submitted_choices'=>'A01|B01','token'=>str_pad((string)$i,32,'U'),'status'=>$status,'active_slot'=>$slot,'submitted_at'=>now(),'submitted_ip'=>'127.0.0.1','created_at'=>now(),'updated_at'=>now()]);
+        $service=new \App\Services\Choice\MultiplePostExport;$data=new ChoiceExportData;
+        $full=$service->dataset($event,null,$data);$unique=$service->dataset($event,null,$data,true);
+        $this->assertCount(6,$full['rows']);$this->assertCount(4,$unique['rows']);$this->assertSame(3,count(array_filter($full['rows'],fn($r)=>$r['submission_status'])));$this->assertSame(1,count(array_filter($unique['rows'],fn($r)=>$r['submission_status'])));
+        $this->assertSame(['260000','260000','260001','260003'],array_column($unique['rows'],'applied_post_code'));$this->assertSame(['0000000001','0000000003','0000000001','0000000002'],array_column($unique['rows'],'reg'));
+        $this->assertSame('Earlier Post Father',$unique['rows'][1]['fname']);$this->assertSame('USER02',$unique['rows'][1]['user']);$this->assertSame('USER01',$unique['rows'][1]['user_260001']);$this->assertSame('USER03',$unique['rows'][1]['user_260003']);
+        $this->assertSame('',$unique['rows'][0]['submitted_choices']);$this->assertFalse($unique['rows'][0]['submission_status']);
+        $summary=$data->summary($event);$this->assertSame($summary['total_candidates'],count($unique['rows']));$this->assertSame($summary['submitted_candidates'],count(array_filter($unique['rows'],fn($r)=>$r['submission_status'])));
+        foreach (['xlsx','dbf'] as $format) {
+            $response=$this->get(route('choice-exports.combined-unique',[$event,$format]))->assertOk();$path=$response->baseResponse->getFile()->getPathname();$this->assertMatchesRegularExpression('/combined-unique-candidates-260000-\d{8}_\d{6}\.'.$format.'/',$response->headers->get('Content-Disposition'));
+            try {
+                if ($format==='xlsx') {
+                    $book=\PhpOffice\PhpSpreadsheet\IOFactory::load($path);$sheet=$book->getActiveSheet();$values=$sheet->toArray(null,true,false);$headers=array_shift($values);$rows=array_map(fn($r)=>array_combine($headers,$r),$values);
+                    $this->assertCount(4,$rows);$this->assertSame(['0000000001','0000000003','0000000001','0000000002'],array_column($rows,'reg'));$this->assertSame('0000000008',$rows[1]['reg_260003']);$this->assertSame(1,count(array_filter($rows,fn($r)=>$r['submission_status'])));$book->disconnectWorksheets();
+                } else {
+                    $bytes=file_get_contents($path);$header=unpack('v',substr($bytes,8,2))[1];$length=unpack('v',substr($bytes,10,2))[1];$this->assertSame(4,unpack('V',substr($bytes,4,4))[1]);$offset=1;$rows=array_fill(0,4,[]);
+                    for ($p=32;ord($bytes[$p])!==13;$p+=32) { $field=rtrim(substr($bytes,$p,11),"\0");$width=ord($bytes[$p+16]);for ($i=0;$i<4;$i++) $rows[$i][$field]=rtrim(substr($bytes,$header+$i*$length+$offset,$width));$offset+=$width; }
+                    $this->assertSame(['260000','260000','260001','260003'],array_column($rows,'POSTCODE'));$this->assertSame('Earlier Post Father',$rows[1]['FNAME']);$this->assertSame('0000000008',$rows[1]['REG_260003']);$this->assertSame(['FALSE','TRUE','FALSE','FALSE'],array_column($rows,'SUBMITTED'));$this->assertSame($header+4*$length+1,strlen($bytes));
+                }
+            } finally { @unlink($path); }
+        }
+        $this->get(route('choice-events.show',$event))->assertOk()->assertSee('Full Combined List')->assertSee('Combined Unique Candidate List');$this->get(route('choice-exports.combined-unique',[$event,'zip']))->assertNotFound();
+        $this->actingAs(User::factory()->create(['role'=>UserRole::Operator,'is_active'=>true]))->get(route('choice-exports.combined-unique',[$event,'dbf']))->assertForbidden();
+    }
     public function test_multi_exports_include_applied_post_code_and_filters_are_event_scoped(): void {
         [$admin,$event,$one,$two]=$this->fixture();$this->upload($event,$one,[$this->row()]);$this->confirm($event,$one);
         $this->upload($event,$two,[$this->row(['user'=>'USER02','reg'=>'0000000002'])]);$this->confirm($event,$two);
