@@ -1,6 +1,6 @@
 <?php
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\{UserController,ChoiceEventController,CandidateImportController,MultiplePostImportController,ChoiceEditorController,CandidateSubmissionController,ChoiceSubmissionAdminController,ChoiceExportController,ChoiceDataResetController,StaffProfileController,SubmissionStatusController};
+use App\Http\Controllers\{UserController,ChoiceEventController,EventPostController,CandidateImportController,MultiplePostImportController,ChoiceEditorController,CandidateSubmissionController,ChoiceSubmissionAdminController,ChoiceExportController,ChoiceDataResetController,StaffProfileController,SubmissionStatusController};
 use App\Http\Middleware\ChoiceStaff;
 use App\Models\ChoiceEvent;
 Route::get('/', fn()=>view('choice.public.home',['events'=>ChoiceEvent::available()->orderBy('end_at')->get()]))->name('home');
@@ -49,6 +49,10 @@ Route::middleware('auth')->group(function () {
         Route::delete('/choice-events/{choiceEvent}', [ChoiceEventController::class,'destroy'])->name('choice-events.destroy');
         Route::delete('/choice-events/{choiceEvent}/posts/{post}/choices/{choice}', [ChoiceEventController::class,'destroyChoice'])->name('choice-options.destroy');
         Route::post('/choice-events/{choiceEvent}/posts', [ChoiceEventController::class,'storePost'])->name('choice-posts.store');
+        Route::get('/choice-events/{choiceEvent}/posts/{post}/edit',[EventPostController::class,'edit'])->name('choice-posts.edit');
+        Route::put('/choice-events/{choiceEvent}/posts/{post}',[EventPostController::class,'update'])->name('choice-posts.update');
+        Route::get('/choice-events/{choiceEvent}/posts/{post}/delete-confirm',[EventPostController::class,'confirmDelete'])->name('choice-posts.confirm-delete');
+        Route::delete('/choice-events/{choiceEvent}/posts/{post}',[EventPostController::class,'destroy'])->name('choice-posts.destroy');
         Route::post('/choice-events/{choiceEvent}/posts/{post}/choices', [ChoiceEventController::class,'storeChoice'])->name('choice-options.store');
         Route::put('/choice-events/{choiceEvent}/posts/{post}/choices', [ChoiceEditorController::class,'save'])->name('choice-editor.save');
         Route::get('/choice-events/{choiceEvent}/posts/{post}/choice-sample', [ChoiceEditorController::class,'sample'])->name('choice-editor.sample');

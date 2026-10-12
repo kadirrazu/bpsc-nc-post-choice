@@ -18,6 +18,7 @@ class MultiplePostMatcher {
     public function revision(ChoiceEvent $event,array $catalog): string {
         // Invalidate pending previews produced by the older, permissive matcher.
         return hash('sha256',json_encode(['review-rules-20261010-2',$catalog,
+            $event->posts()->orderBy('id')->get(['id','post_code','title','organization','ministry']),
             DB::table('candidate_applications')->whereIn('event_candidate_id',$event->candidates()->select('id'))->orderBy('id')->get(['id','event_candidate_id','event_post_id','user','reg','source_identity']),
             DB::table('candidate_imports')->whereIn('event_post_id',$event->posts()->select('id'))->orderBy('id')->pluck('id'),
             DB::table('choice_audits')->where('choice_event_id',$event->id)->where('action','CANDIDATE_DATASET_RESET')->max('id')],JSON_UNESCAPED_UNICODE));

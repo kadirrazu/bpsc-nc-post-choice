@@ -38,6 +38,52 @@ class MultiplePostWorkflowTest extends TestCase {
     private function pending($event,$post): array { return session('multiple_import.'.$event->id.'.'.$post->id); }
     private function confirm($event,$post) { return $this->post(route('choice-multiple.confirm',[$event,$post]),['nonce'=>$this->pending($event,$post)['nonce'],'confirmation'=>1]); }
     private function decisions($event,$post,array $decisions) { return $this->put(route('choice-multiple.decisions',[$event,$post]),['nonce'=>$this->pending($event,$post)['nonce'],'decisions'=>$decisions]); }
+    public function test_edit_post_preserves_imports_links_choices_and_invalidates_old_previews(): void {
+        [$admin,$event,$one,$two]=$this->fixture();$this->upload($event,$one,[$this->row()]);$this->confirm($event,$one);$this->upload($event,$two,[$this->row(['user'=>'USER02','reg'=>'0000000002'])]);$this->confirm($event,$two);
+        $third=$event->posts()->create(['title'=>'Third','post_code'=>'260004']);$this->upload($event,$third,[$this->row(['user'=>'USER03','reg'=>'0000000003'])]);
+        $revision=$this->get(route('choice-posts.edit',[$event,$two]))->assertOk()->viewData('revision');
+        $payload=['revision'=>$revision,'post_code'=>'260003','title'=>'Updated Post','organization'=>'Updated Organization','ministry'=>'Updated Ministry'];
+        $this->put(route('choice-posts.update',[$event,$two]),$payload)->assertRedirect(route('choice-events.show',$event));
+        $this->assertDatabaseHas('event_posts',['id'=>$two->id,'post_code'=>'260003','title'=>'Updated Post']);$this->assertDatabaseCount('event_candidates',1);$this->assertDatabaseCount('candidate_applications',2);$this->assertDatabaseCount('candidate_imports',2);$this->assertDatabaseCount('choice_options',2);
+        $this->assertDatabaseHas('choice_audits',['choice_event_id'=>$event->id,'actor_id'=>$admin->id,'action'=>'POST_UPDATED']);
+        $this->get(route('choice-multiple.review',[$event,$third]))->assertSessionHasErrors('file');
+        $dataset=(new \App\Services\Choice\MultiplePostExport)->dataset($event,null,new ChoiceExportData,true);$this->assertContains('reg_260003',$dataset['columns']);$this->assertSame('0000000002',$dataset['rows'][0]['reg_260003']);
+        $revision=$this->get(route('choice-posts.edit',[$event,$two]))->viewData('revision');$payload['revision']=$revision;$payload['post_code']=$one->post_code;$this->put(route('choice-posts.update',[$event,$two]),$payload)->assertSessionHasErrors('post_code');$this->assertSame('260003',$two->fresh()->post_code);
+        $event->update(['status'=>'PUBLISHED']);$this->post(route('candidate.authenticate',$event),['user'=>'USER02','birth_date'=>'10101997'])->assertRedirect();$this->get(route('candidate.choices',$event))->assertOk()->assertSee('Updated Post')->assertSee('Choice B');
+    }
+    public function test_delete_post_removes_its_dataset_and_exclusive_people_but_preserves_shared_people(): void {
+        [$admin,$event,$one,$two]=$this->fixture();$extra=$this->row(['user'=>'EXTRA01','reg'=>'0000000009','name'=>'Only First Post','fname'=>'','mname'=>'','b_date'=>'03032000','ssc_roll'=>'999999']);
+        $this->upload($event,$one,[$this->row(),$extra]);$this->confirm($event,$one);$this->upload($event,$two,[$this->row(['user'=>'USER02','reg'=>'0000000002'])]);$this->confirm($event,$two);
+        $response=$this->get(route('choice-posts.confirm-delete',[$event,$one]))->assertOk();$this->assertSame(2,$response->viewData('applications'));$this->assertSame(1,$response->viewData('exclusive'));$this->assertSame(1,$response->viewData('shared'));$revision=$response->viewData('revision');
+        $this->delete(route('choice-posts.destroy',[$event,$one]),['revision'=>$revision,'confirmation'=>'NO'])->assertSessionHasErrors('confirmation');$this->assertDatabaseCount('candidate_applications',3);
+        $this->delete(route('choice-posts.destroy',[$event,$one]),['revision'=>$revision,'confirmation'=>'DELETE'])->assertRedirect(route('choice-events.show',$event));
+        $this->assertDatabaseMissing('event_posts',['id'=>$one->id]);$this->assertDatabaseMissing('event_candidates',['name'=>'Only First Post']);$this->assertDatabaseMissing('candidate_imports',['event_post_id'=>$one->id]);$this->assertDatabaseMissing('choice_options',['event_post_id'=>$one->id]);
+        $this->assertDatabaseCount('choice_events',1);$this->assertDatabaseCount('event_candidates',1);$this->assertDatabaseCount('candidate_applications',1);$this->assertDatabaseCount('candidate_imports',1);$this->assertDatabaseCount('choice_options',1);$this->assertDatabaseHas('candidate_applications',['event_post_id'=>$two->id,'user'=>'USER02']);
+        $this->assertDatabaseHas('choice_audits',['choice_event_id'=>$event->id,'actor_id'=>$admin->id,'action'=>'POST_DELETED']);
+        $summary=(new ChoiceExportData)->summary($event);$this->assertSame(1,$summary['total_candidates']);$this->get(route('choice-posts.confirm-delete',[$event,$one]))->assertNotFound();
+        $event->update(['status'=>'PUBLISHED']);$this->post(route('candidate.authenticate',$event),['user'=>'USER02','birth_date'=>'10101997'])->assertRedirect();$this->get(route('candidate.choices',$event))->assertOk()->assertSee('Choice B')->assertDontSee('Choice A');
+    }
+    public function test_post_crud_is_scoped_to_administrators_current_draft_and_multiple_posts(): void {
+        [$admin,$event,$one,$two]=$this->fixture();$other=ChoiceEvent::create(['title'=>'Other','multiple_posts'=>true,'status'=>'DRAFT','start_at'=>now()->subHour(),'end_at'=>now()->addDay(),'created_by'=>$admin->id]);$foreign=$other->posts()->create(['title'=>'Foreign','post_code'=>'999999']);
+        foreach (['choice-posts.edit','choice-posts.confirm-delete'] as $route) $this->get(route($route,[$event,$foreign]))->assertNotFound();
+        $this->delete(route('choice-posts.destroy',[$event,$foreign]),['revision'=>str_repeat('X',64),'confirmation'=>'DELETE'])->assertNotFound();
+        foreach (['PUBLISHED','CLOSED','ARCHIVED','CANCELLED'] as $status) { $event->update(['status'=>$status]);$this->get(route('choice-posts.edit',[$event,$one]))->assertSessionHasErrors('post');$this->delete(route('choice-posts.destroy',[$event,$one]),['revision'=>str_repeat('X',64),'confirmation'=>'DELETE'])->assertSessionHasErrors('post'); }
+        $event->update(['status'=>'DRAFT','end_at'=>now()->subMinute()]);$this->get(route('choice-posts.edit',[$event,$one]))->assertSessionHasErrors('post');$event->update(['end_at'=>now()->addDay(),'multiple_posts'=>false]);$this->get(route('choice-posts.edit',[$event,$one]))->assertNotFound();$this->get(route('choice-events.show',$event))->assertOk()->assertDontSee('Edit Post')->assertDontSee('Delete Post');
+        $event->update(['multiple_posts'=>true]);$this->actingAs(User::factory()->create(['role'=>UserRole::Operator,'is_active'=>true]));$this->get(route('choice-posts.edit',[$event,$one]))->assertForbidden();$this->delete(route('choice-posts.destroy',[$event,$one]),['confirmation'=>'DELETE','revision'=>str_repeat('X',64)])->assertForbidden();$this->assertDatabaseCount('event_posts',3);
+    }
+    public function test_active_or_cancelled_submissions_lock_post_changes_without_deleting_data(): void {
+        [$admin,$event,$one,$two]=$this->fixture();$this->upload($event,$one,[$this->row()]);$this->confirm($event,$one);$person=$event->candidates()->first();$revision=$this->get(route('choice-posts.edit',[$event,$one]))->viewData('revision');
+        $id=DB::table('choice_submissions')->insertGetId(['event_candidate_id'=>$person->id,'submitted_choices'=>'A01','token'=>str_repeat('L',32),'status'=>'SUBMITTED','active_slot'=>1,'submitted_at'=>now(),'submitted_ip'=>'127.0.0.1','created_at'=>now(),'updated_at'=>now()]);
+        foreach (['SUBMITTED','CANCELLED'] as $status) { DB::table('choice_submissions')->where('id',$id)->update(['status'=>$status,'active_slot'=>$status==='SUBMITTED' ? 1 : null]);$this->put(route('choice-posts.update',[$event,$one]),['revision'=>$revision,'post_code'=>'260005','title'=>'Changed'])->assertSessionHasErrors('post');$this->delete(route('choice-posts.destroy',[$event,$one]),['revision'=>$revision,'confirmation'=>'DELETE'])->assertSessionHasErrors('post'); }
+        $this->assertDatabaseCount('choice_submissions',1);$this->assertDatabaseCount('event_candidates',1);$this->assertDatabaseCount('candidate_applications',1);$this->assertDatabaseCount('choice_options',2);$this->assertSame('260001',$one->fresh()->post_code);
+    }
+    public function test_stale_post_forms_and_deleted_post_previews_cannot_commit(): void {
+        [$admin,$event,$one,$two]=$this->fixture();$revision=$this->get(route('choice-posts.edit',[$event,$one]))->viewData('revision');$one->update(['title'=>'Concurrent title']);
+        $this->put(route('choice-posts.update',[$event,$one]),['revision'=>$revision,'post_code'=>'260005','title'=>'Overwrite'])->assertSessionHasErrors('post');$this->assertSame('Concurrent title',$one->fresh()->title);
+        $revision=$this->get(route('choice-posts.confirm-delete',[$event,$one]))->viewData('revision');$one->choices()->create(['choice_event_id'=>$event->id,'code'=>'A02','title'=>'Another choice','sort_order'=>3]);$this->delete(route('choice-posts.destroy',[$event,$one]),['revision'=>$revision,'confirmation'=>'DELETE'])->assertSessionHasErrors('post');$this->assertDatabaseCount('choice_options',3);
+        $this->upload($event,$two,[$this->row()]);$nonce=$this->pending($event,$two)['nonce'];$revision=$this->get(route('choice-posts.confirm-delete',[$event,$two]))->viewData('revision');$this->delete(route('choice-posts.destroy',[$event,$two]),['revision'=>$revision,'confirmation'=>'DELETE'])->assertRedirect();
+        $this->post(route('choice-multiple.confirm',[$event,$two]),['nonce'=>$nonce,'confirmation'=>1])->assertNotFound();$this->assertDatabaseCount('event_candidates',0);$this->assertDatabaseCount('candidate_applications',0);
+    }
     public function test_shared_honorific_and_surname_are_unmatched_even_with_same_dob(): void {
         [$admin,$event,$one,$two]=$this->fixture();
         $this->upload($event,$one,[$this->row(['name'=>'MD. BIPUL HOSSAIN','fname'=>'MD. GOLAP ALI','mname'=>'MST. MEHER BANU'])]);

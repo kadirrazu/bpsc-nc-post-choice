@@ -24,7 +24,7 @@ class ChoiceEventController extends Controller {
     }
     public function show(ChoiceEvent $choiceEvent, \App\Services\Choice\ChoiceExportData $data) {
         $choiceEvent->load(['posts'=>fn($q)=>$q->withCount('applications')->with('choices')]);
-        return view('choice.events.show',['event'=>$choiceEvent,'summary'=>$choiceEvent->multiple_posts ? $data->summary($choiceEvent) : null,'postSummary'=>$choiceEvent->multiple_posts ? $data->postSummary($choiceEvent) : []]);
+        return view('choice.events.show',['event'=>$choiceEvent,'summary'=>$choiceEvent->multiple_posts ? $data->summary($choiceEvent) : null,'postSummary'=>$choiceEvent->multiple_posts ? $data->postSummary($choiceEvent) : [],'postChangesLocked'=>$choiceEvent->multiple_posts && DB::table('choice_submissions')->whereIn('event_candidate_id',$choiceEvent->candidates()->select('id'))->exists()]);
     }
     public function confirmClose(Request $r, ChoiceEvent $choiceEvent) {
         abort_unless($r->user()->role===UserRole::Admin,403);
