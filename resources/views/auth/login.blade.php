@@ -73,7 +73,7 @@
                     </label>
 
                     <input
-                        type="password"
+                        type="password" data-password-toggle
                         id="password"
                         name="password"
                         class="form-control @error('password') is-invalid @enderror"
@@ -110,7 +110,7 @@
                         type="submit"
                         class="btn btn-primary w-100"
                     >
-                        Sign in
+                        <x-icon name="login"/>Sign in
                     </button>
                 </div>
             </form>

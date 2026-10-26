@@ -122,7 +122,7 @@
         </label>
 
         <input
-            type="password"
+            type="password" data-password-toggle
             id="password"
             name="password"
             class="form-control @error('password') is-invalid @enderror"
@@ -148,7 +148,7 @@
         </label>
 
         <input
-            type="password"
+            type="password" data-password-toggle
             id="password_confirmation"
             name="password_confirmation"
             class="form-control"

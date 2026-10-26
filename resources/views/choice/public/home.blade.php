@@ -5,18 +5,20 @@
 <title>BPSC | Choice Taking System</title>
 @vite(['resources/css/app.css','resources/js/app.js'])
 @include('choice.public.shell-styles')
+@include('choice.shared.ui-head')
 </head>
 <body class="choice-public choice-home">
-<div class="container-xl public-frame">
-<header class="choice-header"><div class="public-header-content">
-<a href="{{ route('home') }}" class="choice-brand">Bangladesh Public Service Commission (BPSC)<small>Choice Taking System</small></a>
+<div class="public-frame">
+<header class="choice-header">
+@include('choice.shared.brand-row')
+<div class="container-xl choice-header-actions d-print-none">
 @auth
-<a class="btn btn-outline-secondary btn-sm" href="{{ route('dashboard') }}">Go to Dashboard</a>
+<a class="btn btn-outline-secondary btn-sm" href="{{ route('dashboard') }}"><x-icon name="dashboard"/>Go to Dashboard</a>
 @else
-<a class="btn btn-outline-secondary btn-sm" href="{{ route('login') }}">Administrator Sign In</a>
+<a class="btn btn-outline-secondary btn-sm" href="{{ route('login') }}"><x-icon name="login"/>Administrator Sign In</a>
 @endauth
 </div></header>
-<main class="public-main">
+<main class="container-xl public-main">
 <div class="public-intro-block"><h1 class="h2 mb-1">Choice Submission</h1>
 <p class="public-time-hint">All dates and times are in Bangladesh time (UTC+06:00).</p>
 <p class="text-secondary public-intro mb-4">Select an available event to submit your post preferences. Keep your User ID and birth date (DDMMYYYY) ready.</p></div>
@@ -27,13 +29,13 @@
 <h3 class="public-event-title">{{ $event->title }}</h3>
 <dl class="public-event-meta"><div class="public-meta-post-code"><dt>Post code</dt><dd>{{ $event->post_code }}</dd></div>@if($event->unit)<div class="public-meta-unit"><dt>Unit</dt><dd>{{ $event->unit }}</dd></div>@endif<div class="public-meta-closes"><dt>Submission closes</dt><dd>{{ $event->end_at->format('d M Y, h:i A') }}</dd></div></dl>
 @if($event->instructions)<p class="choice-instructions mb-0">{{ $event->instructions }}</p>@endif
-</div><a class="btn btn-primary public-submit" href="{{ route('candidate.login',$event) }}">Submit Choices</a></div></article>
+</div><a class="btn btn-primary public-submit" href="{{ route('candidate.login',$event) }}"><x-icon name="choices"/>Submit Choices</a></div></article>
 @empty
 <div class="public-empty" role="status"><strong>No events are accepting choices right now.</strong><p>Please check again during the announced submission period.</p></div>
 @endforelse
 </div></section>
 </main>
-<footer class="public-footer"><span>Bangladesh Public Service Commission (BPSC)</span><span class="public-footer-credit">Software Developed By: <strong>IT Section, BPSC</strong></span></footer>
+<footer class="public-footer"><div class="container-xl public-footer-content"><span>Bangladesh Public Service Commission (BPSC)</span><span class="public-footer-credit">Software Developed By: <strong>IT Section, BPSC</strong></span></div></footer>
 </div>
 </body>
 </html>
